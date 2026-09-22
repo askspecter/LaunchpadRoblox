@@ -1,16 +1,17 @@
 import { keccak256, toBytes, type Address, type Hash } from "viem";
 
-// The RBLX voucher store.
+// The Robux order store (manual fulfillment).
 //
 // A buyer pays native ETH to the store treasury. Once that payment confirms
-// on-chain, this module derives a one-off redeem code that is cryptographically
+// on-chain, this module derives a one-off order code that is cryptographically
 // bound to the payment transaction hash — so every code maps to exactly one
 // real, explorer-verifiable payment and cannot be minted out of thin air.
 //
-// IMPORTANT: the code redeems for the RBLX token (the community "Robux" token on
-// Robinhood Chain), NOT for actual Roblox in-game currency. The pair underneath
-// stays native ETH; the code is the receipt/voucher the operator honours into
-// RBLX. There is no auto-generation of real Roblox codes here, by design.
+// IMPORTANT: this software does NOT mint, hold, or auto-convert anything into
+// Robux. The code is a proof-of-purchase / order reference. Robux is delivered
+// MANUALLY by the store operator after payment, off-chain. There is no
+// automatic crypto-to-Robux conversion here, by design — that cannot be done
+// legitimately, and any site claiming it is a scam.
 
 export type StorePack = {
   id: string;

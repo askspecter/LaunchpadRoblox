@@ -256,11 +256,6 @@ export default function Home() {
   const isAdapterOwner = Boolean(
     account && adapterOwner && isAddressEqual(account, adapterOwner),
   );
-  const activeConfig = useMemo(
-    () => configs.find((config) => config.id === selectedConfig),
-    [configs, selectedConfig],
-  );
-
   const filteredFeed = useMemo(() => {
     if (feedFilter === "mine")
       return feed.filter((r) => account && isAddressEqual(r.creator, account));
@@ -447,7 +442,6 @@ export default function Home() {
     }
     if (!form.name.trim() || !form.symbol.trim() || !form.description.trim())
       return toast.error("Name, ticker, and description are required.");
-    if (!activeConfig) return toast.error("No active Pons launch configuration.");
     if (canLaunch === false)
       return toast.error("This address is not yet allowed to launch on Pons V2.");
 
@@ -456,12 +450,26 @@ export default function Home() {
     setLoading("launch");
     try {
       await ensureChain();
-      const expectedEconomics = await publicClient.readContract({
-        address: contracts.ponsFactory,
-        abi: factoryAbi,
-        functionName: "previewLaunchEconomics",
-        args: [selectedConfig, zeroAddress],
-      });
+      // Read the economics preview and the current launch fee live, with retry,
+      // so a rate-limited earlier read can never block an otherwise valid
+      // launch. previewLaunchEconomics also validates the selected config.
+      const [expectedEconomics, fee] = await Promise.all([
+        readWithRetry(() =>
+          publicClient.readContract({
+            address: contracts.ponsFactory,
+            abi: factoryAbi,
+            functionName: "previewLaunchEconomics",
+            args: [selectedConfig, zeroAddress],
+          }),
+        ),
+        readWithRetry(() =>
+          publicClient.readContract({
+            address: contracts.ponsFactory,
+            abi: factoryAbi,
+            functionName: "launchFee",
+          }),
+        ).catch(() => launchFee),
+      ]);
       const salt = toHex(crypto.getRandomValues(new Uint8Array(32)));
       const creatorTaxBps = Number(form.creatorTax);
       const hash = await writeContractAsync({
@@ -491,7 +499,7 @@ export default function Home() {
           selectedConfig,
           zeroAddress,
         ],
-        value: launchFee,
+        value: fee,
       });
       setLastHash(hash);
       addLaunch({
@@ -642,7 +650,7 @@ export default function Home() {
       });
       setLastOrder(order);
       setLastHash(hash);
-      toast.success(`Paid in ETH — your ${ROBUX_TICKER} voucher code is ready.`);
+      toast.success("Paid in ETH — your order code is ready.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message.slice(0, 160) : "Payment failed");
     } finally {
@@ -655,15 +663,15 @@ export default function Home() {
     if (result.ok) {
       setRedeemStatus({ kind: "ok", order: result.order });
       setRedeemInput("");
-      toast.success(`Code redeemed for ${result.order.robux.toLocaleString()} ${ROBUX_TICKER}`);
+      toast.success(`Order for ${result.order.robux.toLocaleString()} Robux marked fulfilled`);
       return;
     }
     const message =
       result.reason === "format"
         ? "That code is not in the right format."
         : result.reason === "already"
-          ? "This code has already been redeemed."
-          : "No purchase on this device matches that code.";
+          ? "This order has already been marked fulfilled."
+          : "No order on this device matches that code.";
     setRedeemStatus({ kind: "error", message });
     toast.error(message);
   };
@@ -762,13 +770,13 @@ export default function Home() {
       <div className="page-head">
         <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
         <div className="eyebrow"><span /> <ShoppingBag size={13} /> Robux store</div>
-        <h1 className="page-title">Pay in ETH. Claim a {ROBUX_TICKER} code.</h1>
-        <p className="page-sub">Pick a pack, pay with native ETH from your own wallet, and the moment the payment confirms you get a redeem code bound to that transaction. Redeem it to receive {ROBUX_NAME} ({ROBUX_TICKER}) — the pair stays ETH the whole way.</p>
+        <h1 className="page-title">Buy Robux with ETH.</h1>
+        <p className="page-sub">Pick a pack and pay with native ETH from your own wallet. The moment the payment confirms you get an order code bound to that transaction — your proof of purchase. The store operator then delivers your {ROBUX_NAME} manually.</p>
       </div>
 
       <div className="store-notice">
         <ShieldCheck size={18} />
-        <p><strong>Read this first.</strong> The code redeems for the <b>{ROBUX_TICKER}</b> token on Robinhood Chain (a community token named &ldquo;Robux&rdquo;), <b>not</b> for Roblox in-game currency. Bloxpad is not affiliated with Roblox Corporation, and this is not a Roblox gift-card generator. Your wallet signs every payment; the app never holds a private key.</p>
+        <p><strong>How delivery works.</strong> Robux is <b>delivered manually by the store operator</b> after your ETH payment confirms. Bloxpad the software does not mint, hold, or guarantee Robux, and does <b>not</b> auto-convert crypto into Robux. Bloxpad is not affiliated with Roblox Corporation. Your wallet signs the payment; the app never holds a private key. Only buy if you trust the operator to fulfil your order.</p>
       </div>
 
       <div className="store-grid">
@@ -783,7 +791,7 @@ export default function Home() {
             >
               {pack.popular && <span className="pack-flag">{pack.tagline}</span>}
               <div className="pack-amount"><span className="pack-symbol">{ROBUX_SYMBOL}</span>{total.toLocaleString()}</div>
-              <div className="pack-sub">{ROBUX_TICKER} voucher{pack.bonusPct ? ` · +${pack.bonusPct}% bonus` : ""}</div>
+              <div className="pack-sub">Robux · delivered manually{pack.bonusPct ? ` · +${pack.bonusPct}% bonus` : ""}</div>
               <div className="pack-price"><Fuel size={13} /> {pack.priceEth} ETH</div>
               <Button
                 className="pack-buy"
@@ -805,8 +813,8 @@ export default function Home() {
 
       {lastOrder && (
         <div className="code-card">
-          <div className="code-card-head"><Ticket size={18} /> Your voucher code</div>
-          <p className="code-card-sub">Save this code. Redeem it below to receive {lastOrder.robux.toLocaleString()} {ROBUX_TICKER}.</p>
+          <div className="code-card-head"><Ticket size={18} /> Your order code</div>
+          <p className="code-card-sub">Keep this code as proof of purchase and send it to the operator. Your {lastOrder.robux.toLocaleString()} Robux is delivered manually after payment.</p>
           <div className="code-value">
             <code>{lastOrder.code}</code>
             <button
@@ -824,8 +832,8 @@ export default function Home() {
 
       <div className="redeem-block">
         <div className="redeem-panel">
-          <div className="redeem-head"><KeyRound size={18} /> Redeem a code</div>
-          <p className="redeem-sub">Paste a Bloxpad voucher code to claim its {ROBUX_TICKER}.</p>
+          <div className="redeem-head"><KeyRound size={18} /> Operator: fulfil an order</div>
+          <p className="redeem-sub">Once you have sent the Robux, paste the order code to mark it delivered.</p>
           <div className="redeem-row">
             <input
               value={redeemInput}
@@ -834,12 +842,12 @@ export default function Home() {
               spellCheck={false}
             />
             <Button className="redeem-btn" onClick={runRedeem} disabled={!redeemInput.trim()}>
-              <Gift size={16} /> Redeem
+              <Gift size={16} /> Mark fulfilled
             </Button>
           </div>
           {redeemStatus?.kind === "ok" && (
             <div className="redeem-result redeem-ok">
-              <Check size={15} /> Redeemed {redeemStatus.order.robux.toLocaleString()} {ROBUX_TICKER}. The operator delivers to the buyer wallet {shorten(redeemStatus.order.buyer, 4)}.
+              <Check size={15} /> Order for {redeemStatus.order.robux.toLocaleString()} Robux marked fulfilled — buyer wallet {shorten(redeemStatus.order.buyer, 4)}.
             </div>
           )}
           {redeemStatus?.kind === "error" && (
@@ -848,9 +856,9 @@ export default function Home() {
         </div>
 
         <div className="orders-panel">
-          <div className="orders-head"><Ticket size={15} /> My vouchers <span>{orders.length}</span></div>
+          <div className="orders-head"><Ticket size={15} /> My orders <span>{orders.length}</span></div>
           {orders.length === 0 ? (
-            <p className="orders-empty">Vouchers you buy on this device show up here.</p>
+            <p className="orders-empty">Orders you buy on this device show up here.</p>
           ) : (
             <ul className="orders-list">
               {orders.slice(0, 8).map((order) => (
@@ -861,7 +869,7 @@ export default function Home() {
                   </div>
                   <div className="order-meta">
                     <span className={order.status === "redeemed" ? "order-redeemed" : "order-active"}>
-                      {order.status === "redeemed" ? "Redeemed" : "Active"}
+                      {order.status === "redeemed" ? "Fulfilled" : "Awaiting"}
                     </span>
                     <a href={explorerTx(order.txHash)} target="_blank" rel="noreferrer" aria-label="View payment"><ExternalLink size={13} /></a>
                   </div>
@@ -873,8 +881,8 @@ export default function Home() {
       </div>
 
       <div className="page-crosslink">
-        <span>Want the fee engine that funds {ROBUX_TICKER}?</span>
-        <button className="text-link" onClick={() => navigate("claim")}>Go to Claim fees <ArrowRight size={15} /></button>
+        <span>Want to launch your own coin?</span>
+        <button className="text-link" onClick={() => navigate("launch")}>Go to Launch <ArrowRight size={15} /></button>
       </div>
     </section>
   );
@@ -960,9 +968,9 @@ export default function Home() {
             </div>
           )}
 
-          <Button className="launch-button" onClick={launch} disabled={loading === "launch" || loadingConfigs || configs.length === 0 || (adapterReady && !adapterOwner) || Boolean(account && adapterReady && adapterOwner && !isAdapterOwner)}>
+          <Button className="launch-button" onClick={launch} disabled={loading === "launch"}>
             {loading === "launch" ? <LoaderCircle className="animate-spin" size={18} /> : <Rocket size={18} />}
-            {account ? "Launch with ETH pair" : "Connect to launch"}
+            Launch
             <ArrowRight size={18} />
           </Button>
           <p className="fineprint">{adapterReady ? `Creator fees route to the ${ROBUX_TICKER} adapter.` : "Creator fees are paid to your wallet in ETH — deliver Robux to buyers yourself."} Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
