@@ -62,6 +62,13 @@ export function addLaunch(record: Omit<LaunchRecord, "id" | "createdAt">): Launc
   return full;
 }
 
+export function removeLaunch(id: string): void {
+  const next = safeRead().filter((record) => record.id !== id);
+  safeWrite(next);
+  const sorted = getLaunchFeed();
+  listeners.forEach((fn) => fn(sorted));
+}
+
 export function subscribeFeed(fn: Listener): () => void {
   listeners.add(fn);
   if (typeof window !== "undefined") {

@@ -28,6 +28,7 @@ import {
   ShoppingBag,
   Sparkles,
   Ticket,
+  Trash2,
   Wallet,
   X,
   Zap,
@@ -69,6 +70,7 @@ import {
 import {
   addLaunch,
   getLaunchFeed,
+  removeLaunch,
   subscribeFeed,
   timeAgo,
   type LaunchRecord,
@@ -195,6 +197,19 @@ function FeedCard({ record }: { record: LaunchRecord }) {
         <span className="feed-media-fallback">{ticker.slice(0, 4)}</span>
         <span className="feed-badge"><Zap size={11} /> {ROBUX_TICKER} loop</span>
         {record.buybackEnabled && <span className="feed-badge feed-badge-buyback">Buyback</span>}
+        <button
+          className="feed-remove"
+          aria-label="Remove from feed"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm(`Remove ${record.name} from your local feed?`)) {
+              removeLaunch(record.id);
+              toast.success("Removed from feed");
+            }
+          }}
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
       <div className="feed-body">
         <div className="feed-heading">
@@ -318,16 +333,20 @@ export default function Home() {
         }),
       );
 
-      const records = await readWithRetry(() =>
-        publicClient.multicall({
-          allowFailure: false,
-          contracts: Array.from({ length: Number(count) }, (_, index) => ({
-            address: contracts.ponsFactory,
-            abi: factoryAbi,
-            functionName: "getLaunchConfig" as const,
-            args: [BigInt(index)] as const,
-          })),
-        }),
+      // Read each config with an individual call rather than one multicall.
+      // Single reads succeed on this RPC where the batched multicall can fail
+      // in the browser, which is what left the config "not read from chain".
+      const records = await Promise.all(
+        Array.from({ length: Number(count) }, (_, index) =>
+          readWithRetry(() =>
+            publicClient.readContract({
+              address: contracts.ponsFactory,
+              abi: factoryAbi,
+              functionName: "getLaunchConfig",
+              args: [BigInt(index)],
+            }),
+          ),
+        ),
       );
 
       const open = records
@@ -512,6 +531,14 @@ export default function Home() {
         value: fee,
       });
       setLastHash(hash);
+      toast.success("Launch submitted. Waiting for confirmation…");
+      // Only record the launch once the transaction actually confirms on chain.
+      // A submitted tx can still revert; adding to the feed on submission alone
+      // is what put failed launches in the feed.
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") {
+        return toast.error("Launch reverted on chain — nothing was added to the feed.");
+      }
       addLaunch({
         name: form.name.trim(),
         symbol: form.symbol.trim().toUpperCase(),
@@ -527,7 +554,7 @@ export default function Home() {
         creator: account,
       });
       setForm(initialForm);
-      toast.success("Launch transaction submitted. Added to the live feed.");
+      toast.success("Launch confirmed. Added to the live feed.");
       navigate("feed");
     } catch (error) {
       toast.error(error instanceof Error ? error.message.slice(0, 160) : "Launch failed");
@@ -541,24 +568,18 @@ export default function Home() {
     try {
       if (claimMode === "curve") {
         if (!isAddress(curveAddress)) throw new Error("Invalid curve address.");
-        const [baseFee, creatorTax] = await publicClient.multicall({
-          allowFailure: false,
-          contracts: [
-            { address: curveAddress, abi: curveFeeAbi, functionName: "quoteFeeBalance" },
-            { address: curveAddress, abi: curveFeeAbi, functionName: "creatorTaxBalance" },
-          ],
-        });
+        const [baseFee, creatorTax] = await Promise.all([
+          readWithRetry(() => publicClient.readContract({ address: curveAddress, abi: curveFeeAbi, functionName: "quoteFeeBalance" })),
+          readWithRetry(() => publicClient.readContract({ address: curveAddress, abi: curveFeeAbi, functionName: "creatorTaxBalance" })),
+        ]);
         setPendingFees(baseFee + creatorTax);
       } else if (claimMode === "pool") {
         if (!/^0x[0-9a-fA-F]{64}$/.test(poolId))
           throw new Error("Pool ID must be bytes32 (0x plus 64 hex characters).");
-        const [baseFee, creatorTax] = await publicClient.multicall({
-          allowFailure: false,
-          contracts: [
-            { address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingFees", args: [poolId as Hash, zeroAddress] },
-            { address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingCreatorTax", args: [poolId as Hash, zeroAddress] },
-          ],
-        });
+        const [baseFee, creatorTax] = await Promise.all([
+          readWithRetry(() => publicClient.readContract({ address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingFees", args: [poolId as Hash, zeroAddress] })),
+          readWithRetry(() => publicClient.readContract({ address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingCreatorTax", args: [poolId as Hash, zeroAddress] })),
+        ]);
         setPendingFees(baseFee + creatorTax);
       } else {
         setPendingFees(claimable);

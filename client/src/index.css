@@ -294,6 +294,10 @@ ol.toaster { max-width: 100vw; box-sizing: border-box; }
 .feed-media-fallback { color: rgba(26,12,4,.85); font: 800 34px var(--font-display); letter-spacing: -.04em; z-index: 1; }
 .feed-badge { position: absolute; z-index: 3; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; border-radius: 999px; background: rgba(10,6,17,.85); color: #ff7a1f; font: 700 8px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; backdrop-filter: blur(6px); }
 .feed-badge-buyback { left: auto; right: 10px; color: #cfa8ff; }
+.feed-remove { position: absolute; z-index: 4; top: 10px; right: 10px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #fff; background: rgba(10,6,17,.7); backdrop-filter: blur(6px); opacity: 0; transition: opacity 160ms var(--ease-out), background 160ms var(--ease-out); }
+.feed-card:hover .feed-remove { opacity: 1; }
+.feed-remove:hover { background: rgba(255,103,92,.85); }
+@media (hover: none) { .feed-remove { opacity: 1; } }
 .feed-body { display: flex; flex-direction: column; gap: 10px; padding: 15px 16px 16px; }
 .feed-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .feed-heading strong { font: 650 16px var(--font-display); letter-spacing: -.02em; color: #f6f1ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
