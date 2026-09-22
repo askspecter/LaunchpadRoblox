@@ -79,12 +79,22 @@ export const contracts = {
     "0xE5e702641Ea86F4ae6cC3cDaeD2B886f976Be044",
   ),
   claimAdapter: envAddress("VITE_CLAIM_ADAPTER_ADDRESS", zeroAddress),
+  // Address that receives ETH from RBLX voucher-store purchases. Set this to
+  // the treasury/operator wallet that fulfils redeem codes into RBLX.
+  storeTreasury: envAddress("VITE_STORE_TREASURY_ADDRESS", zeroAddress),
   targetToken: envAddress(
     "VITE_TARGET_TOKEN_ADDRESS",
     "0xac3D5a9c7824a091b48AD5AAB101B0586444cb07",
   ),
   officialRobloxToken: envAddress(
     "VITE_OFFICIAL_RBLX_ADDRESS",
+    "0xF0C4BF4C582cb3836e98394b1d4e7B7281101bE8",
+  ),
+  // Quote/pair asset every launch is denominated in. Zero address = native ETH.
+  // Default is the Roblox · Robinhood Token (RBLX) so creator fees accrue in
+  // RBLX directly. Verify liquidity and pair support before relying on it.
+  pairToken: envAddress(
+    "VITE_PAIR_TOKEN_ADDRESS",
     "0xF0C4BF4C582cb3836e98394b1d4e7B7281101bE8",
   ),
   uniswapRouter: envAddress(
@@ -97,6 +107,27 @@ export const publicClient = createPublicClient({
   chain: robinhoodChain,
   transport: http(robinhoodRpcUrl),
 });
+
+/**
+ * Run a chain read, retrying on transient failures (notably HTTP 429 from the
+ * public RPC) with exponential backoff. The default public endpoint rate-limits
+ * aggressively, so a single 429 must not abort a whole batch of reads.
+ */
+export async function readWithRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const transient = /429|too many requests|rate.?limit|timeout|timed out|network|fetch failed|failed to fetch|econnreset/i.test(message);
+      if (!transient || attempt === tries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
 
 export const factoryAbi = parseAbi([
   "struct LaunchConfig { uint256 supply; uint256 curveFeeBps; uint256 phantomQuote; uint256 graduationThreshold; uint24 poolFee; int24 tickSpacing; bool enabled; }",
@@ -144,6 +175,11 @@ export type LaunchConfig = {
   tickSpacing: number;
   enabled: boolean;
 };
+
+// Display symbol for the pair asset (native ETH when pairToken is the zero
+// address, otherwise the configured quote token, defaulting to RBLX).
+export const pairTokenSymbol =
+  (import.meta.env.VITE_PAIR_TOKEN_SYMBOL as string | undefined) || "RBLX";
 
 export const explorerAddress = (address: Address) =>
   `${explorerUrl}/address/${address}`;
