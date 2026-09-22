@@ -289,7 +289,9 @@ export default function Home() {
           open.some((item) => item.id === current) ? current : open[0].id,
         );
     } catch {
-      toast.error("Could not read Pons data. The public RPC may be rate limited.");
+      // Reading Pons config from the public RPC can fail (rate limit / CORS).
+      // Fail quietly — the launch console reflects the missing data inline
+      // instead of interrupting the feed with an error toast.
     }
   }, []);
 
@@ -633,7 +635,7 @@ export default function Home() {
             <div><span>Pair</span><strong>Native ETH</strong></div>
             <div><span>Recipient</span><strong>{adapterReady ? shorten(contracts.claimAdapter) : "No adapter yet"}</strong></div>
             <div><span>Launch fee</span><strong>{formatEth(launchFee)} ETH</strong></div>
-            <div><span>Eligibility</span><strong className={canLaunch === false ? "text-amber-300" : "text-lime-300"}>{canLaunch === null ? "Connect wallet" : canLaunch ? "Eligible" : "Whitelist required"}</strong></div>
+            <div><span>Eligibility</span><strong className={canLaunch === false ? "text-amber-300" : "text-orange-300"}>{canLaunch === null ? "Connect wallet" : canLaunch ? "Eligible" : "Whitelist required"}</strong></div>
           </div>
 
           <Button className="launch-button" onClick={launch} disabled={loading === "launch" || configs.length === 0 || (adapterReady && !adapterOwner) || Boolean(account && adapterOwner && !isAdapterOwner)}>
@@ -775,9 +777,9 @@ export default function Home() {
   return (
     <div className="site-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => navigate("feed")} aria-label="Robux Loop home">
-          <img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" />
-          <span>ROBUX<span className="brand-accent">/LOOP</span></span>
+        <button className="brand" onClick={() => navigate("feed")} aria-label="Bloxpad home">
+          <img className="brand-icon" src="/images/bloxpad-logo.png" alt="" />
+          <span>BLOX<span className="brand-accent">PAD</span></span>
         </button>
         <div className="topbar-actions">
           <Button className="launch-cta-btn" onClick={() => navigate("launch")}>
@@ -830,8 +832,8 @@ export default function Home() {
       </main>
 
       <footer className="footer container">
-        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" /><span>ROBUX<span className="brand-accent">/LOOP</span></span></button>
-        <p>Independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
+        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/bloxpad-logo.png" alt="" /><span>BLOX<span className="brand-accent">PAD</span></span></button>
+        <p>Bloxpad is an independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
         <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">Pons docs <ExternalLink size={13} /></a>
       </footer>
     </div>

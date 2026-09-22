@@ -1,6 +1,6 @@
-# ROBUX/LOOP
+# Bloxpad
 
-**ROBUX/LOOP** is a non-custodial launchpad interface for Pons V2 on Robinhood Chain. Every launch keeps **native ETH as the pair**. Each launch uses a dedicated `ClaimToRBLXAdapter` with its own owner and treasury. The adapter can sweep Pons fees, claim the ETH from escrow, and swap it into the target token — **Robux (RBLX)** — in a single atomic transaction.
+**Bloxpad** is a non-custodial launchpad interface for Pons V2 on Robinhood Chain. Every launch keeps **native ETH as the pair**. Each launch uses a dedicated `ClaimToRBLXAdapter` with its own owner and treasury. The adapter can sweep Pons fees, claim the ETH from escrow, and swap it into the target token — **Robux (RBLX)** — in a single atomic transaction.
 
 > Current status: the frontend and smart contract are implemented and tested locally. **The adapter is not deployed and no mainnet transaction is broadcast by this repository.**
 
@@ -8,7 +8,7 @@
 
 Pons V2 sets the quote asset when a launch is created. If the quote asset is the zero address, the bonding curve and the post-graduation pool stay denominated in ETH. Pons then pays the creator in that same quote asset, so an ETH launch produces creator fees in ETH.[1]
 
-ROBUX/LOOP does not change that mechanism. The trading pair underneath every launch remains native ETH. What the interface adds is a **loop into Robux**: the creator-fee recipient is a launch-specific adapter that claims the accrued ETH and swaps it into the Robux (RBLX) token, so the value the launch accumulates ends up denominated in the Roblox in-game currency. The `R$` symbol in the UI always refers to the RBLX target token, never fiat.
+Bloxpad does not change that mechanism. The trading pair underneath every launch remains native ETH. What the interface adds is a **loop into Robux**: the creator-fee recipient is a launch-specific adapter that claims the accrued ETH and swaps it into the Robux (RBLX) token, so the value the launch accumulates ends up denominated in the Roblox in-game currency. The `R$` symbol in the UI always refers to the RBLX target token, never fiat.
 
 ```text
 Trader → Pons V2 curve/pool (ETH pair)

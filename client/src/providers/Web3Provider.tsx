@@ -19,11 +19,11 @@ createAppKit({
   defaultNetwork: robinhoodNetwork,
   projectId: REOWN_PROJECT_ID,
   metadata: {
-    name: "Robux Loop",
+    name: "Bloxpad",
     description:
       "Launch tokens on Pons V2 with a native ETH pair and loop creator fees into Robux.",
-    url: typeof window !== "undefined" ? window.location.origin : "https://robuxloop.app",
-    icons: ["/images/robux-loop-icon.webp"],
+    url: typeof window !== "undefined" ? window.location.origin : "https://bloxpad.app",
+    icons: ["/images/bloxpad-logo.png"],
   },
   features: {
     analytics: false,
@@ -32,7 +32,7 @@ createAppKit({
   },
   themeMode: "dark",
   themeVariables: {
-    "--w3m-accent": "#c7ff3d",
+    "--w3m-accent": "#ff7a1f",
     "--w3m-border-radius-master": "2px",
   },
 });
