@@ -1,4 +1,5 @@
 import type { Address, Hash } from "viem";
+import { OFFICIAL_TOKENS, isOfficialToken } from "./official";
 
 // A launch recorded by this interface. The on-chain pair is always native ETH;
 // `targetToken` is the Robux token that creator fees are looped into.
@@ -21,6 +22,8 @@ export type LaunchRecord = {
   // the curve and token state directly.
   tokenAddress?: Address;
   curveAddress?: Address;
+  // Curated official token (e.g. $BLOX): pinned, non-removable, code-only.
+  official?: boolean;
 };
 
 const STORAGE_KEY = "robux-loop:launch-feed:v1";
@@ -63,7 +66,12 @@ function emit() {
 }
 
 export function getLaunchFeed(): LaunchRecord[] {
-  return sortRecords(safeRead());
+  // Official tokens are pinned to the top and de-duped against any user record
+  // that points at the same on-chain token.
+  const user = sortRecords(safeRead()).filter(
+    (r) => !isOfficialToken(r.tokenAddress),
+  );
+  return [...OFFICIAL_TOKENS, ...user];
 }
 
 // ---- shared (server) sync ---------------------------------------------------
@@ -135,6 +143,7 @@ export function addLaunch(record: Omit<LaunchRecord, "id" | "createdAt">): Launc
 }
 
 export function removeLaunch(id: string): void {
+  if (id.startsWith("official:")) return; // official tokens can't be removed
   safeWrite(safeRead().filter((record) => record.id !== id));
   emit();
   void apiDelete(id);
