@@ -101,6 +101,27 @@ export const publicClient = createPublicClient({
   transport: http(robinhoodRpcUrl),
 });
 
+/**
+ * Run a chain read, retrying on transient failures (notably HTTP 429 from the
+ * public RPC) with exponential backoff. The default public endpoint rate-limits
+ * aggressively, so a single 429 must not abort a whole batch of reads.
+ */
+export async function readWithRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const transient = /429|too many requests|rate.?limit|timeout|timed out|network|fetch failed|failed to fetch|econnreset/i.test(message);
+      if (!transient || attempt === tries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
 export const factoryAbi = parseAbi([
   "struct LaunchConfig { uint256 supply; uint256 curveFeeBps; uint256 phantomQuote; uint256 graduationThreshold; uint24 poolFee; int24 tickSpacing; bool enabled; }",
   "struct Socials { string twitter; string telegram; string discord; string website; string farcaster; }",

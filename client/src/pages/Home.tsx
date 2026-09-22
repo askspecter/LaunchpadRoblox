@@ -58,6 +58,7 @@ import {
   factoryAbi,
   hookFeeAbi,
   publicClient,
+  readWithRetry,
   robinhoodChain,
   type LaunchConfig,
 } from "@/lib/web3";
@@ -233,6 +234,8 @@ export default function Home() {
   const [poolId, setPoolId] = useState("");
   const [pendingFees, setPendingFees] = useState<bigint | null>(null);
   const [loading, setLoading] = useState<"launch" | "claim" | "fees" | null>(null);
+  const [loadingConfigs, setLoadingConfigs] = useState(false);
+  const [protocolError, setProtocolError] = useState<string | null>(null);
   const [lastHash, setLastHash] = useState<Hash | null>(null);
   const [feed, setFeed] = useState<LaunchRecord[]>([]);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
@@ -297,44 +300,66 @@ export default function Home() {
   }, []);
 
   const refreshProtocol = useCallback(async () => {
+    setLoadingConfigs(true);
     try {
-      const [count, fee] = await Promise.all([
+      // Read the config count and the configs themselves with retry. These are
+      // what gate the launch button, so they must not be aborted by a single
+      // 429 from the public RPC.
+      const count = await readWithRetry(() =>
         publicClient.readContract({
           address: contracts.ponsFactory,
           abi: factoryAbi,
           functionName: "launchConfigCount",
         }),
-        publicClient.readContract({
-          address: contracts.ponsFactory,
-          abi: factoryAbi,
-          functionName: "launchFee",
-        }),
-      ]);
+      );
 
-      const records = await publicClient.multicall({
-        allowFailure: false,
-        contracts: Array.from({ length: Number(count) }, (_, index) => ({
-          address: contracts.ponsFactory,
-          abi: factoryAbi,
-          functionName: "getLaunchConfig" as const,
-          args: [BigInt(index)] as const,
-        })),
-      });
+      const records = await readWithRetry(() =>
+        publicClient.multicall({
+          allowFailure: false,
+          contracts: Array.from({ length: Number(count) }, (_, index) => ({
+            address: contracts.ponsFactory,
+            abi: factoryAbi,
+            functionName: "getLaunchConfig" as const,
+            args: [BigInt(index)] as const,
+          })),
+        }),
+      );
 
       const open = records
         .map((record, index) => ({ id: BigInt(index), ...record }))
         .filter((record) => record.enabled) as LaunchConfig[];
 
       setConfigs(open);
-      setLaunchFee(fee);
+      setProtocolError(
+        open.length === 0 ? "No open Pons launch configuration is enabled on chain right now." : null,
+      );
       if (open.length > 0)
         setSelectedConfig((current) =>
           open.some((item) => item.id === current) ? current : open[0].id,
         );
+
+      // The launch fee is non-critical for enabling the button, so a failure
+      // here must not clear the configs we already loaded.
+      try {
+        const fee = await readWithRetry(() =>
+          publicClient.readContract({
+            address: contracts.ponsFactory,
+            abi: factoryAbi,
+            functionName: "launchFee",
+          }),
+        );
+        setLaunchFee(fee);
+      } catch {
+        /* keep the last known launch fee */
+      }
     } catch {
-      // Reading Pons config from the public RPC can fail (rate limit / CORS).
-      // Fail quietly — the launch console reflects the missing data inline
-      // instead of interrupting the feed with an error toast.
+      // Surface the failure with a Retry affordance instead of leaving the
+      // launch button silently disabled.
+      setProtocolError(
+        "Couldn't read the Pons launch config — the public RPC may be rate limited. Retry, or set VITE_ROBINHOOD_RPC_URL to a dedicated endpoint.",
+      );
+    } finally {
+      setLoadingConfigs(false);
     }
   }, []);
 
@@ -345,29 +370,35 @@ export default function Home() {
         const reads: Promise<unknown>[] = [];
         if (adapterReady) {
           reads.push(
-            publicClient.readContract({
-              address: contracts.ponsFeeEscrow,
-              abi: escrowAbi,
-              functionName: "balanceOf",
-              args: [contracts.claimAdapter],
-            }),
+            readWithRetry(() =>
+              publicClient.readContract({
+                address: contracts.ponsFeeEscrow,
+                abi: escrowAbi,
+                functionName: "balanceOf",
+                args: [contracts.claimAdapter],
+              }),
+            ),
           );
           reads.push(
-            publicClient.readContract({
-              address: contracts.claimAdapter,
-              abi: adapterAbi,
-              functionName: "owner",
-            }),
+            readWithRetry(() =>
+              publicClient.readContract({
+                address: contracts.claimAdapter,
+                abi: adapterAbi,
+                functionName: "owner",
+              }),
+            ),
           );
         }
         if (activeAccount) {
           reads.push(
-            publicClient.readContract({
-              address: contracts.ponsFactory,
-              abi: factoryAbi,
-              functionName: "canLaunch",
-              args: [activeAccount],
-            }),
+            readWithRetry(() =>
+              publicClient.readContract({
+                address: contracts.ponsFactory,
+                abi: factoryAbi,
+                functionName: "canLaunch",
+                args: [activeAccount],
+              }),
+            ),
           );
         }
         const result = await Promise.all(reads);
@@ -405,17 +436,22 @@ export default function Home() {
 
   const launch = async () => {
     if (!isConnected || !account) return open();
-    if (!adapterReady)
-      return toast.error("Deploy ClaimToRBLXAdapter, then set VITE_CLAIM_ADAPTER_ADDRESS.");
-    if (!adapterOwner)
-      return toast.error("Adapter owner could not be verified onchain yet.");
-    if (adapterOwner && !isAdapterOwner)
-      return toast.error("This wallet is not the adapter owner. Use the adapter dedicated to this launch.");
+    // The RBLX auto-buy adapter is optional. When it is configured, only its
+    // owner may launch into it; when it is not, creator fees route to the
+    // connected wallet as native ETH (collect ETH, deliver Robux manually).
+    if (adapterReady) {
+      if (!adapterOwner)
+        return toast.error("Adapter owner could not be verified onchain yet.");
+      if (!isAdapterOwner)
+        return toast.error("This wallet is not the adapter owner. Use the adapter dedicated to this launch.");
+    }
     if (!form.name.trim() || !form.symbol.trim() || !form.description.trim())
       return toast.error("Name, ticker, and description are required.");
     if (!activeConfig) return toast.error("No active Pons launch configuration.");
     if (canLaunch === false)
       return toast.error("This address is not yet allowed to launch on Pons V2.");
+
+    const creatorFeeRecipient = adapterReady ? contracts.claimAdapter : account;
 
     setLoading("launch");
     try {
@@ -446,7 +482,7 @@ export default function Home() {
               website: form.website.trim(),
               farcaster: "",
             },
-            creatorFeeRecipient: contracts.claimAdapter,
+            creatorFeeRecipient,
             creatorTaxBps,
             buybackEnabled: form.buybackEnabled,
             expectedEconomics,
@@ -849,7 +885,7 @@ export default function Home() {
         <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
         <div className="eyebrow"><span /> Launch console</div>
         <h1 className="page-title">Launch a coin.</h1>
-        <p className="page-sub">Create a token on Pons V2 with a native ETH pair. Creator fees route to your dedicated adapter so they can be looped into {ROBUX_TICKER}.</p>
+        <p className="page-sub">Create a token on Pons V2 with a native ETH pair. Creator fees are paid in ETH to your wallet — you deliver Robux to buyers yourself. Optionally point fees at the {ROBUX_TICKER} adapter to auto-swap them into the {ROBUX_TICKER} token instead.</p>
       </div>
 
       <div className="page-narrow">
@@ -906,17 +942,30 @@ export default function Home() {
 
           <div className="launch-summary">
             <div><span>Pair</span><strong>Native ETH</strong></div>
-            <div><span>Recipient</span><strong>{adapterReady ? shorten(contracts.claimAdapter) : "No adapter yet"}</strong></div>
+            <div><span>Fees to</span><strong>{adapterReady ? `${ROBUX_TICKER} adapter` : account ? "Your wallet (ETH)" : "Your wallet"}</strong></div>
             <div><span>Launch fee</span><strong>{formatEth(launchFee)} ETH</strong></div>
             <div><span>Eligibility</span><strong className={canLaunch === false ? "text-amber-300" : "text-orange-300"}>{canLaunch === null ? "Connect wallet" : canLaunch ? "Eligible" : "Whitelist required"}</strong></div>
           </div>
 
-          <Button className="launch-button" onClick={launch} disabled={loading === "launch" || configs.length === 0 || (adapterReady && !adapterOwner) || Boolean(account && adapterOwner && !isAdapterOwner)}>
+          {(protocolError || loadingConfigs) && (
+            <div className="config-status">
+              {loadingConfigs ? (
+                <span className="config-loading"><LoaderCircle className="animate-spin" size={14} /> Reading Pons launch config…</span>
+              ) : (
+                <>
+                  <span><CircleAlert size={14} /> {protocolError}</span>
+                  <button type="button" onClick={refreshProtocol}>Retry</button>
+                </>
+              )}
+            </div>
+          )}
+
+          <Button className="launch-button" onClick={launch} disabled={loading === "launch" || loadingConfigs || configs.length === 0 || (adapterReady && !adapterOwner) || Boolean(account && adapterReady && adapterOwner && !isAdapterOwner)}>
             {loading === "launch" ? <LoaderCircle className="animate-spin" size={18} /> : <Rocket size={18} />}
             {account ? "Launch with ETH pair" : "Connect to launch"}
             <ArrowRight size={18} />
           </Button>
-          <p className="fineprint">Use one adapter per launch and treasury. Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
+          <p className="fineprint">{adapterReady ? `Creator fees route to the ${ROBUX_TICKER} adapter.` : "Creator fees are paid to your wallet in ETH — deliver Robux to buyers yourself."} Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
         </div>
 
         <div className="page-crosslink">

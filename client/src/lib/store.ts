@@ -45,8 +45,8 @@ function base32(bytes: Uint8Array): string {
   let bits = 0;
   let value = 0;
   let out = "";
-  for (const byte of bytes) {
-    value = (value << 8) | byte;
+  for (let i = 0; i < bytes.length; i++) {
+    value = (value << 8) | bytes[i];
     bits += 8;
     while (bits >= 5) {
       out += ALPHABET[(value >>> (bits - 5)) & 31];
@@ -59,7 +59,7 @@ function base32(bytes: Uint8Array): string {
 
 const checksum = (body: string): string => {
   let sum = 0;
-  for (const ch of body) sum += INDEX.get(ch) ?? 0;
+  for (let i = 0; i < body.length; i++) sum += INDEX.get(body[i]) ?? 0;
   return ALPHABET[sum % 32];
 };
 
@@ -79,10 +79,12 @@ export function deriveCode(txHash: Hash, packId: string): string {
 
 /** Normalise user-typed input: uppercase, fix look-alikes, strip separators. */
 export function normalizeCode(input: string): string {
-  return input
-    .toUpperCase()
-    .replace(/^BLOX/, "")
-    .replace(/[^0-9A-Z]/g, "")
+  // Strip everything but letters/digits first, so a leading space or missing
+  // dash never blocks the prefix removal. The 16-char body can never start with
+  // "BLOX" (the alphabet excludes L and O), so this is unambiguous.
+  let body = input.toUpperCase().replace(/[^0-9A-Z]/g, "");
+  if (body.startsWith("BLOX")) body = body.slice(4);
+  return body
     .replace(/I/g, "1")
     .replace(/L/g, "1")
     .replace(/O/g, "0")
@@ -93,7 +95,7 @@ export function normalizeCode(input: string): string {
 export function isValidCodeFormat(input: string): boolean {
   const body = normalizeCode(input);
   if (body.length !== 16) return false;
-  if (![...body].every((c) => INDEX.has(c))) return false;
+  if (!body.split("").every((c) => INDEX.has(c))) return false;
   return checksum(body.slice(0, 15)) === body[15];
 }
 
