@@ -73,6 +73,15 @@ export function removeLaunch(id: string): void {
   listeners.forEach((fn) => fn(sorted));
 }
 
+// Re-insert a previously removed record (keeps its original id/createdAt) so a
+// delete can be undone from the toast.
+export function restoreLaunch(record: LaunchRecord): void {
+  const next = [record, ...safeRead().filter((r) => r.id !== record.id)].slice(0, MAX_RECORDS);
+  safeWrite(next);
+  const sorted = getLaunchFeed();
+  listeners.forEach((fn) => fn(sorted));
+}
+
 export function subscribeFeed(fn: Listener): () => void {
   listeners.add(fn);
   if (typeof window !== "undefined") {

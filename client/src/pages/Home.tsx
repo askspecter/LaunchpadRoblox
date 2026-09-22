@@ -72,6 +72,7 @@ import {
   addLaunch,
   getLaunchFeed,
   removeLaunch,
+  restoreLaunch,
   subscribeFeed,
   timeAgo,
   type LaunchRecord,
@@ -222,10 +223,10 @@ function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: st
           aria-label="Remove from feed"
           onClick={(e) => {
             e.stopPropagation();
-            if (confirm(`Remove ${record.name} from your local feed?`)) {
-              removeLaunch(record.id);
-              toast.success("Removed from feed");
-            }
+            removeLaunch(record.id);
+            toast.success(`Removed ${record.name}`, {
+              action: { label: "Undo", onClick: () => restoreLaunch(record) },
+            });
           }}
         >
           <Trash2 size={13} />
