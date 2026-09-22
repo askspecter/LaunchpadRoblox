@@ -90,6 +90,13 @@ export const contracts = {
     "VITE_OFFICIAL_RBLX_ADDRESS",
     "0xF0C4BF4C582cb3836e98394b1d4e7B7281101bE8",
   ),
+  // Quote/pair asset every launch is denominated in. Zero address = native ETH.
+  // Default is the Roblox · Robinhood Token (RBLX) so creator fees accrue in
+  // RBLX directly. Verify liquidity and pair support before relying on it.
+  pairToken: envAddress(
+    "VITE_PAIR_TOKEN_ADDRESS",
+    "0xF0C4BF4C582cb3836e98394b1d4e7B7281101bE8",
+  ),
   uniswapRouter: envAddress(
     "VITE_UNISWAP_ROUTER_ADDRESS",
     "0xcaf681a66d020601342297493863e78c959e5cb2",
@@ -168,6 +175,11 @@ export type LaunchConfig = {
   tickSpacing: number;
   enabled: boolean;
 };
+
+// Display symbol for the pair asset (native ETH when pairToken is the zero
+// address, otherwise the configured quote token, defaulting to RBLX).
+export const pairTokenSymbol =
+  (import.meta.env.VITE_PAIR_TOKEN_SYMBOL as string | undefined) || "RBLX";
 
 export const explorerAddress = (address: Address) =>
   `${explorerUrl}/address/${address}`;

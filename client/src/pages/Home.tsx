@@ -57,6 +57,7 @@ import {
   explorerTx,
   factoryAbi,
   hookFeeAbi,
+  pairTokenSymbol,
   publicClient,
   readWithRetry,
   robinhoodChain,
@@ -98,6 +99,11 @@ type FeedFilter = "all" | "mine" | "buyback";
 type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts";
 
 const CHAIN_ID = 4663;
+
+// The pair/quote asset every launch is denominated in. Zero address = native
+// ETH; otherwise the configured token (RBLX by default).
+const PAIR_IS_ETH = isAddressEqual(contracts.pairToken, zeroAddress);
+const PAIR_LABEL = PAIR_IS_ETH ? "ETH" : pairTokenSymbol;
 
 const initialForm: FormState = {
   name: "",
@@ -192,7 +198,7 @@ function FeedCard({ record }: { record: LaunchRecord }) {
           <span>${ticker}</span>
         </div>
         <div className="feed-subline">
-          <span className="feed-pair">ETH pair</span>
+          <span className="feed-pair">{PAIR_LABEL} pair</span>
           <span className="feed-time">{timeAgo(record.createdAt)}</span>
         </div>
         {record.description && <p className="feed-desc">{record.description}</p>}
@@ -459,7 +465,7 @@ export default function Home() {
             address: contracts.ponsFactory,
             abi: factoryAbi,
             functionName: "previewLaunchEconomics",
-            args: [selectedConfig, zeroAddress],
+            args: [selectedConfig, contracts.pairToken],
           }),
         ),
         readWithRetry(() =>
@@ -497,7 +503,7 @@ export default function Home() {
             salt,
           },
           selectedConfig,
-          zeroAddress,
+          contracts.pairToken,
         ],
         value: fee,
       });
@@ -724,7 +730,7 @@ export default function Home() {
         <div>
           <div className="eyebrow"><span /> <Radio size={13} /> Live feed</div>
           <h2>Fresh launches.</h2>
-          <p className="feed-intro">Coins launched through this interface, paired with ETH and looping fees into {ROBUX_TICKER}.</p>
+          <p className="feed-intro">Coins launched through this interface, paired with {PAIR_LABEL} so creator fees accrue in {PAIR_LABEL}.</p>
         </div>
         <div className="feed-toolbar">
           <div className="feed-filters" role="tablist" aria-label="Feed filter">
@@ -893,7 +899,7 @@ export default function Home() {
         <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
         <div className="eyebrow"><span /> Launch console</div>
         <h1 className="page-title">Launch a coin.</h1>
-        <p className="page-sub">Create a token on Pons V2 with a native ETH pair. Creator fees are paid in ETH to your wallet — you deliver Robux to buyers yourself. Optionally point fees at the {ROBUX_TICKER} adapter to auto-swap them into the {ROBUX_TICKER} token instead.</p>
+        <p className="page-sub">Create a token on Pons V2 paired with {PAIR_LABEL}. Creator fees accrue in {PAIR_LABEL} to your wallet — you then deliver Robux to buyers yourself with a redeem code.</p>
       </div>
 
       <div className="page-narrow">
@@ -949,8 +955,8 @@ export default function Home() {
           </div>
 
           <div className="launch-summary">
-            <div><span>Pair</span><strong>Native ETH</strong></div>
-            <div><span>Fees to</span><strong>{adapterReady ? `${ROBUX_TICKER} adapter` : account ? "Your wallet (ETH)" : "Your wallet"}</strong></div>
+            <div><span>Pair</span><strong>{PAIR_IS_ETH ? "Native ETH" : PAIR_LABEL}</strong></div>
+            <div><span>Fees to</span><strong>{adapterReady ? `${ROBUX_TICKER} adapter` : account ? `Your wallet (${PAIR_LABEL})` : "Your wallet"}</strong></div>
             <div><span>Launch fee</span><strong>{formatEth(launchFee)} ETH</strong></div>
             <div><span>Eligibility</span><strong className={canLaunch === false ? "text-amber-300" : "text-orange-300"}>{canLaunch === null ? "Connect wallet" : canLaunch ? "Eligible" : "Whitelist required"}</strong></div>
           </div>
@@ -973,7 +979,7 @@ export default function Home() {
             Launch
             <ArrowRight size={18} />
           </Button>
-          <p className="fineprint">{adapterReady ? `Creator fees route to the ${ROBUX_TICKER} adapter.` : "Creator fees are paid to your wallet in ETH — deliver Robux to buyers yourself."} Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
+          <p className="fineprint">{adapterReady ? `Creator fees route to the ${ROBUX_TICKER} adapter.` : `Creator fees are paid to your wallet in ${PAIR_LABEL} — deliver Robux to buyers yourself.`} Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
         </div>
 
         <div className="page-crosslink">
@@ -1051,7 +1057,7 @@ export default function Home() {
       <div className="page-head">
         <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
         <div className="eyebrow"><span /> How it works</div>
-        <h1 className="page-title">One loop. Same ETH pair.</h1>
+        <h1 className="page-title">How the fee loop works.</h1>
         <p className="page-sub">Pons still prices the curve, graduation, and fees in ETH. The only thing that changes is the creator fee recipient: an adapter smart contract instead of a plain wallet.</p>
       </div>
 
