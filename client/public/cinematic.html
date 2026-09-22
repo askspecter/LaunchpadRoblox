@@ -462,226 +462,179 @@
 
 <script>
 (function(){
-  var W = document.getElementById('world');
-  var scroll = document.getElementById('siteScroll');
-  var term = document.getElementById('term');
-  var typed = document.getElementById('typed');
-  var caret = document.getElementById('caret');
-  var out = document.getElementById('out');
-  var cap = document.getElementById('caption').querySelector('.chip');
-  var capNo = document.getElementById('capNo');
-  var capTt = document.getElementById('capTt');
-  var openCard = document.getElementById('opencard');
-  var endCard = document.getElementById('endcard');
-  var zoomhint = document.getElementById('zoomhint');
-  var bar = document.getElementById('bar');
-  var clock = document.getElementById('clock');
-  var hud = document.getElementById('hud');
-  var btnPlay = document.getElementById('btnPlay');
-  var kb = document.getElementById('keyboard');
-  var termdim = document.getElementById('termdim');
+  var $=function(id){return document.getElementById(id);};
+  var W=$('world'), scroll=$('siteScroll'), term=$('term'), termdim=$('termdim'),
+      typed=$('typed'), caret=$('caret'), out=$('out'), capChip=document.querySelector('.caption .chip'),
+      capNo=$('capNo'), capTt=$('capTt'), openCard=$('opencard'), endCard=$('endcard'),
+      zoomhint=$('zoomhint'), bar=$('bar'), clock=$('clock'), hud=$('hud'), btnPlay=$('btnPlay'), kb=$('keyboard');
+  var reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
 
-  // Measure real section positions so captions line up with what's on screen.
-  // Screen viewport inside the bezel is ~536px tall; park each section's eyebrow
-  // near the top with a small margin.
-  var SCREEN_H = 536, TOPPAD = 34;
-  var secOffset = {};
-  function measure(){
-    ['feed','store','launch','how','contracts'].forEach(function(id){
-      var el = document.querySelector('[data-sec="'+id+'"]');
-      secOffset[id] = el ? -(el.offsetTop - TOPPAD) : 0;
-    });
-  }
-  measure(); window.addEventListener('load', measure);
+  // build keyboard + embers
+  for(var i=0;i<42;i++) kb.appendChild(document.createElement('i'));
+  var keys=kb.querySelectorAll('i');
+  var eb=$('embers');
+  for(var e=0;e<26;e++){var d=document.createElement('div');d.className='ember';
+    d.style.left=Math.random()*100+'%';d.style.animationDuration=(7+Math.random()*9)+'s';
+    d.style.animationDelay=(-Math.random()*12)+'s';d.style.setProperty('--dx',(Math.random()*80-40)+'px');
+    d.style.width=d.style.height=(2+Math.random()*3)+'px';eb.appendChild(d);}
 
-  var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
+  // kill CSS transitions on driven elements — we interpolate every frame ourselves
+  [W,scroll,term,termdim,capChip,zoomhint,openCard,endCard,
+   document.querySelector('.bars.top'),document.querySelector('.bars.bot')]
+    .forEach(function(el){if(el) el.style.transition='none';});
+  document.querySelectorAll('.titlecard .kick,.titlecard .ttl,.titlecard .foot')
+    .forEach(function(el){el.style.transition='none';});
+  document.body.classList.add('cine');       // letterbox on immediately
+  endCard.style.display='grid';               // keep in flow; opacity drives it
 
-  // build keyboard keys
-  for(var i=0;i<42;i++){ kb.appendChild(document.createElement('i')); }
-  var keys = kb.querySelectorAll('i');
+  // measure real section offsets so captions match what's on screen
+  var SCREEN_TOPPAD=34, secOffset={};
+  function measure(){['feed','store','launch','how','contracts'].forEach(function(id){
+    var el=document.querySelector('[data-sec="'+id+'"]');
+    secOffset[id]=el?-(el.offsetTop-SCREEN_TOPPAD):0;});}
+  measure(); window.addEventListener('load',measure);
 
-  // embers
-  var eb = document.getElementById('embers');
-  for(var e=0;e<26;e++){
-    var d = document.createElement('div'); d.className='ember';
-    d.style.left = Math.random()*100+'%';
-    d.style.animationDuration = (7+Math.random()*9)+'s';
-    d.style.animationDelay = (-Math.random()*12)+'s';
-    d.style.setProperty('--dx',(Math.random()*80-40)+'px');
-    d.style.width = d.style.height = (2+Math.random()*3)+'px';
-    eb.appendChild(d);
-  }
+  // ---- timeline constants (ms) ----
+  var TXT='deploy $test', CH=TXT.length, perChar=300;
+  var typeStart=18800, typeEnd=typeStart+CH*perChar;          // 22400
+  var outStart=typeEnd+280, outStep=520, outN=5;
+  var outDone=outStart+(outN-1)*outStep;                       // ~24760
+  var finalStart=outDone+800, finalEnd=finalStart+2100;       // ~25560 -> ~27660
+  var endCardT=finalStart+950;                                 // ~26510
+  var DUR=finalEnd+500;                                        // ~28160
+  window.__DUR=DUR;
 
-  function cam(o){
-    if(o.dur!=null) W.style.setProperty('--camdur', o.dur+'ms');
-    if(o.cs!=null) W.style.setProperty('--cs', o.cs);
-    if(o.cx!=null) W.style.setProperty('--cx', o.cx);
-    if(o.cy!=null) W.style.setProperty('--cy', o.cy);
-    if(o.rx!=null) W.style.setProperty('--rx', o.rx);
-    if(o.ry!=null) W.style.setProperty('--ry', o.ry);
-  }
-  function sscroll(px,dur){
-    scroll.style.setProperty('--camdur',(dur||1800)+'ms');
-    scroll.style.setProperty('--scroll', px);
-  }
-  function showCap(no,tt){
-    cap.classList.remove('in');
-    setTimeout(function(){ capNo.textContent=no; capTt.textContent=tt; cap.classList.add('in'); }, 260);
-  }
-  function hideCap(){ cap.classList.remove('in'); }
+  var CAM=[
+    {t:0,     s:0.86, x:0,   y:0,  rx:8, ry:0},
+    {t:2000,  s:0.94, x:0,   y:-6, rx:6, ry:-2},
+    {t:4600,  s:1.72, x:0,   y:8,  rx:2, ry:0},
+    {t:5200,  s:1.86, x:-14, y:10, rx:1, ry:3},
+    {t:7600,  s:1.80, x:14,  y:8,  rx:1, ry:-3},
+    {t:10000, s:1.90, x:-12, y:10, rx:1, ry:2},
+    {t:12400, s:1.82, x:12,  y:8,  rx:1, ry:-2},
+    {t:14800, s:1.90, x:-10, y:10, rx:1, ry:2},
+    {t:17300, s:2.35, x:0,   y:6,  rx:2, ry:0},
+    {t:typeStart, s:2.35, x:0, y:6, rx:2, ry:0},
+    {t:typeEnd, s:0.72, x:0, y:-6, rx:8, ry:0},
+    {t:finalStart, s:0.72, x:0, y:-4, rx:8, ry:0},
+    {t:finalEnd, s:0.70, x:0, y:0, rx:9, ry:0}
+  ];
+  var SCR=[
+    {t:0,'v':'feed'},{t:4600,'v':'feed'},{t:5200,'v':'feed'},
+    {t:7600,'v':'store'},{t:10000,'v':'launch'},{t:12400,'v':'how'},
+    {t:14800,'v':'contracts'},{t:17300,'v':'launch'}
+  ];
+  var CAPS=[
+    {a:4600,b:7600,no:'01',tt:'Live feed'},
+    {a:7600,b:10000,no:'02',tt:'Robux store'},
+    {a:10000,b:12400,no:'03',tt:'Launch a coin'},
+    {a:12400,b:14800,no:'04',tt:'The fee loop'},
+    {a:14800,b:17300,no:'05',tt:'Contracts'},
+    {a:17900,b:finalStart,no:'06',tt:'Deploy'}
+  ];
 
-  // TOTAL runtime approx
-  var TOTAL = 27000;
-
-  // ---- timeline as a list of steps (delay from previous, action) ----
-  var timers = [];
-  function at(t,fn){ timers.push(setTimeout(fn,t)); }
-  function clearAll(){ timers.forEach(clearTimeout); timers=[]; }
-
-  var running=false, paused=false, startTime=0, elapsedBase=0, raf;
-
-  function fmt(ms){ ms=Math.max(0,ms); var s=Math.floor(ms/1000); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
-  function tick(){
-    if(!running||paused) return;
-    var el = elapsedBase + (performance.now()-startTime);
-    var p = Math.min(1, el/TOTAL);
-    bar.style.width = (p*100)+'%';
-    clock.textContent = fmt(el)+' / '+fmt(TOTAL);
-    raf = requestAnimationFrame(tick);
-  }
-
-  function typeDeploy(startT){
-    // "deploy $test" -> each char zooms the camera OUT one notch
-    var text = 'deploy $test';
-    var chars = text.split('');
-    // camera zoom-out schedule: from tight-on-terminal to whole room
-    var zStart = 2.35, zEnd = 0.72;
-    var per = 300; // ms per char
-    zoomhint.classList.add('in');
-    for(var c=0;c<chars.length;c++){
-      (function(idx){
-        at(startT + idx*per, function(){
-          typed.textContent = text.slice(0, idx+1);
-          // discrete zoom-out step on every keystroke
-          var z = zStart + (zEnd - zStart) * ((idx+1)/chars.length);
-          var driftX = (idx%2? 6 : -6);
-          cam({dur:per+140, cs:z, cx:driftX, cy:6 - idx*1.2, rx:2 + idx*0.5, ry:(idx%2? 3 : -3)});
-          // flash a keyboard key
-          var k = keys[(idx*3+5)%keys.length]; if(k){ k.classList.add('hot'); setTimeout(function(){k.classList.remove('hot');},220); }
-        });
-      })(c);
+  function clamp(v,a,b){return v<a?a:v>b?b:v;}
+  function lerp(a,b,e){return a+(b-a)*e;}
+  function easeInOut(u){return u<0.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;}
+  function easeOut(u){return 1-Math.pow(1-u,3);}
+  function interp(keys,t,f){
+    if(t<=keys[0].t) return keys[0][f];
+    if(t>=keys[keys.length-1].t) return keys[keys.length-1][f];
+    for(var i=0;i<keys.length-1;i++){
+      if(t>=keys[i].t && t<=keys[i+1].t){
+        var span=keys[i+1].t-keys[i].t; var u=span?(t-keys[i].t)/span:0;
+        return lerp(keys[i][f],keys[i+1][f],easeInOut(u));
+      }
     }
-    var doneT = startT + chars.length*per;
-    // print output lines
-    ['0','1','2','3','4'].forEach(function(l,i){
-      at(doneT + 260 + i*520, function(){
-        var line = out.querySelector('[data-l="'+l+'"]'); if(line) line.classList.add('in');
-      });
-    });
-    at(doneT + 260, function(){ zoomhint.classList.remove('in'); });
-    return doneT + 260 + 5*520; // when outputs finished
+    return keys[keys.length-1][f];
   }
-
-  function runShow(){
-    running=true; paused=false; btnPlay.textContent='⏸';
-    endCard.style.display='none';
-    endCard.classList.remove('in');
-    hud.classList.add('in');
-    elapsedBase=0; startTime=performance.now();
-    cancelAnimationFrame(raf); tick();
-    document.body.classList.add('cine');
-
-    // reset state
-    typed.textContent=''; caret.style.display='inline-block';
-    out.querySelectorAll('[data-l]').forEach(function(n){n.classList.remove('in');});
-    term.classList.remove('show'); termdim.classList.remove('show'); zoomhint.classList.remove('in');
-    // opening wide shot
-    cam({dur:60, cs:0.86, cx:0, cy:0, rx:8, ry:0}); sscroll(0,60);
-    openCard.style.display='grid'; openCard.classList.add('in'); openCard.classList.remove('hide');
-
-    // 1. hold opening title, subtle drift
-    at(60, function(){ cam({dur:2600, cs:0.92, cx:0, cy:-6, rx:6, ry:-2}); });
-    at(1700, function(){ openCard.classList.add('hide'); });
-    at(2500, function(){ openCard.style.display='none'; });
-
-    // 2. push in to the screen
-    at(2200, function(){ measure(); sscroll(secOffset.feed,10); cam({dur:2400, cs:1.72, cx:0, cy:8, rx:2, ry:0}); showCap('01','Live feed'); });
-
-    // 3. tour sections (scroll the site to each real section + gentle camera drift)
-    at(5000, function(){ sscroll(secOffset.feed,2200); cam({dur:2400, cs:1.86, cx:-14, cy:10, rx:1, ry:3}); });
-    at(7300, function(){ sscroll(secOffset.store,2200); cam({dur:2400, cs:1.8, cx:14, cy:8, rx:1, ry:-3}); showCap('02','Robux store'); });
-    at(9800, function(){ sscroll(secOffset.launch,2200); cam({dur:2400, cs:1.9, cx:-12, cy:10, rx:1, ry:2}); showCap('03','Launch a coin'); });
-    at(12300,function(){ sscroll(secOffset.how,2200); cam({dur:2400, cs:1.82, cx:12, cy:8, rx:1, ry:-2}); showCap('04','The fee loop'); });
-    at(14800,function(){ sscroll(secOffset.contracts,2200); cam({dur:2400, cs:1.9, cx:-10, cy:10, rx:1, ry:2}); showCap('05','Contracts'); });
-
-    // 4. move to deploy — recenter, dim the site, terminal rises, tighten
-    at(17300,function(){ hideCap(); sscroll(secOffset.launch,1400); cam({dur:1600, cs:2.35, cx:0, cy:6, rx:2, ry:0}); });
-    at(17900,function(){ termdim.classList.add('show'); term.classList.add('show'); showCap('06','Deploy'); });
-
-    // 5. type "deploy $test" — zoom out on every keystroke
-    var typeStart = 18800;
-    var endOfType = typeDeploy(typeStart);
-
-    // 6. final wide reveal + end card
-    at(endOfType + 200, function(){
-      cam({dur:2000, cs:0.7, cx:0, cy:0, rx:9, ry:0}); hideCap();
-    });
-    at(endOfType + 1400, function(){
-      endCard.style.display='grid'; void endCard.offsetWidth; endCard.classList.add('in');
-    });
-    at(endOfType + 1500, function(){
-      running=false; bar.style.width='100%'; clock.textContent=fmt(TOTAL)+' / '+fmt(TOTAL);
-      cancelAnimationFrame(raf);
-    });
-    TOTAL = endOfType + 1500;
-  }
-
-  function start(){ clearAll(); runShow(); }
-
-  function togglePause(){
-    if(!running && !paused){ start(); return; }
-    paused=!paused;
-    if(paused){
-      btnPlay.textContent='▶'; elapsedBase += performance.now()-startTime; cancelAnimationFrame(raf);
-      // freeze pending timers
-      clearAll(); pausedAtWasRunning=true;
-    } else {
-      btnPlay.textContent='⏸'; startTime=performance.now(); tick();
-      // simplest robust resume: restart from beginning is jarring, so just resume clock;
-      // for a short film we accept restart-on-pause-resume only if it was paused mid-run
+  function interpScroll(t){
+    var kf=SCR;
+    if(t<=kf[0].t) return secOffset[kf[0].v]||0;
+    if(t>=kf[kf.length-1].t) return secOffset[kf[kf.length-1].v]||0;
+    for(var i=0;i<kf.length-1;i++){
+      if(t>=kf[i].t && t<=kf[i+1].t){
+        var span=kf[i+1].t-kf[i].t; var u=span?(t-kf[i].t)/span:0;
+        return lerp(secOffset[kf[i].v]||0, secOffset[kf[i+1].v]||0, easeInOut(u));
+      }
     }
+    return secOffset[kf[kf.length-1].v]||0;
   }
-  var pausedAtWasRunning=false;
+  function fmt(ms){ms=Math.max(0,ms);var s=Math.round(ms/1000);return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2);}
 
-  btnPlay.addEventListener('click', function(){
-    if(endCard.classList.contains('in')){ start(); return; }
-    if(!running){ start(); return; }
-    // pause = freeze camera by stopping clock only (visual keeps last target)
-    if(!paused){ paused=true; btnPlay.textContent='▶'; elapsedBase+=performance.now()-startTime; cancelAnimationFrame(raf); }
-    else { paused=false; btnPlay.textContent='⏸'; startTime=performance.now(); tick(); }
-  });
-
-  document.getElementById('replay').addEventListener('click', start);
-
-  // Interactive flourish: while the deploy terminal is visible, real key presses also nudge a zoom-out.
   var extraZoom=0;
-  window.addEventListener('keydown', function(ev){
-    if(!term.classList.contains('show')) return;
-    if(ev.key==='Enter' || ev.key===' ') ev.preventDefault();
-    extraZoom = Math.min(extraZoom+0.04, 0.5);
-    var cur = parseFloat(getComputedStyle(W).getPropertyValue('--cs'))||1.5;
-    cam({dur:280, cs:Math.max(0.6, cur-0.05)});
+  function applyState(T){
+    T=clamp(T,0,DUR);
+    // camera
+    var cs,cx,cy,rx,ry;
+    if(T>=typeStart && T<typeEnd){
+      var idx=Math.floor((T-typeStart)/perChar); idx=clamp(idx,0,CH-1);
+      var frac=((T-typeStart)-idx*perChar)/perChar;
+      var p0=idx/CH, p1=(idx+1)/CH;
+      var p=p0+(p1-p0)*easeOut(Math.min(1,frac/0.62));
+      cs=lerp(2.35,0.72,p); cx=(idx%2?7:-7)*(1-p); cy=lerp(6,-6,p); rx=lerp(2,8,p); ry=(idx%2?3:-3);
+    } else {
+      cs=interp(CAM,T,'s'); cx=interp(CAM,T,'x'); cy=interp(CAM,T,'y'); rx=interp(CAM,T,'rx'); ry=interp(CAM,T,'ry');
+    }
+    cs=Math.max(0.55,cs-extraZoom);
+    W.style.setProperty('--cs',cs); W.style.setProperty('--cx',cx); W.style.setProperty('--cy',cy);
+    W.style.setProperty('--rx',rx); W.style.setProperty('--ry',ry);
+    // site scroll
+    scroll.style.setProperty('--scroll', interpScroll(T));
+    // typed command
+    var tc = T<typeStart?0:Math.min(CH,Math.floor((T-typeStart)/perChar)+1);
+    typed.textContent=TXT.slice(0,tc);
+    caret.style.opacity = (T>=17900 && T<outDone) ? '' : (T>=outDone?'0':'');
+    // output lines
+    for(var l=0;l<outN;l++){var n=out.querySelector('[data-l="'+l+'"]'); if(n) n.classList.toggle('in', T>=outStart+l*outStep);}
+    // terminal + dimmer
+    var to=clamp((T-17900)/700,0,1); to=easeOut(to);
+    term.style.opacity=to; term.style.transform='translateY('+(14*(1-to))+'px) scale('+lerp(.98,1,to)+')';
+    termdim.style.opacity=to;
+    // zoom-out hint
+    var zh=(T>=typeStart-150 && T<=typeEnd+150)?0.9:0; zoomhint.style.opacity=zh;
+    // captions
+    var seg=null; for(var c=0;c<CAPS.length;c++){if(T>=CAPS[c].a && T<CAPS[c].b){seg=CAPS[c];break;}}
+    if(seg){capNo.textContent=seg.no; capTt.textContent=seg.tt;
+      var fin=clamp((T-seg.a)/300,0,1), fout=clamp((seg.b-T)/300,0,1);
+      var o=Math.min(fin,fout); capChip.style.opacity=o; capChip.style.transform='translateY('+(10*(1-o))+'px)';
+    } else { capChip.style.opacity=0; }
+    // keyboard highlight during typing
+    keys.forEach(function(k){k.classList.remove('hot');});
+    if(T>=typeStart && T<typeEnd){var k=keys[((Math.floor((T-typeStart)/perChar))*3+5)%keys.length]; if(k)k.classList.add('hot');}
+    // title cards (toggle .in so the inner kick/title/foot become visible)
+    var oo=clamp(T<1700?1:(T<2500?1-(T-1700)/800:0),0,1); openCard.style.opacity=oo;
+    openCard.style.display=oo<=0?'none':'grid'; openCard.classList.toggle('in', oo>0.02);
+    var eo=T<endCardT?0:Math.min(1,(T-endCardT)/600); endCard.style.opacity=eo;
+    endCard.style.pointerEvents=eo>0.5?'auto':'none'; endCard.classList.toggle('in', eo>0.02);
+    // hud
+    bar.style.width=(T/DUR*100)+'%'; clock.textContent=fmt(T)+' / '+fmt(DUR);
+  }
+  window.__seek=function(T){applyState(T);};
+  window.__ready=true;
+
+  // ---- live playback ----
+  var raf=null, playing=false, startT=0, baseT=0;
+  function loop(now){ if(!playing) return; var T=baseT+(now-startT); if(T>=DUR){T=DUR; applyState(T); playing=false; btnPlay.textContent='↻'; return;} applyState(T); raf=requestAnimationFrame(loop); }
+  function play(from){ if(from!=null) baseT=from; playing=true; btnPlay.textContent='⏸'; hud.classList.add('in'); startT=performance.now(); cancelAnimationFrame(raf); raf=requestAnimationFrame(loop); }
+  function pause(){ playing=false; btnPlay.textContent='▶'; baseT=clamp(baseT+(performance.now()-startT),0,DUR); cancelAnimationFrame(raf); }
+  function restart(){ extraZoom=0; applyState(0); play(0); }
+
+  btnPlay.addEventListener('click',function(){ if(!playing){ if(baseT>=DUR) restart(); else play(baseT);} else pause(); });
+  $('replay').addEventListener('click',restart);
+
+  // interactive flourish: real key presses during deploy nudge extra zoom-out
+  window.addEventListener('keydown',function(ev){
+    if(!(baseT>=17900 && baseT<=finalEnd) && !(playing)) return;
+    if(ev.key==='Enter'||ev.key===' ') ev.preventDefault();
+    var live = playing ? baseT+(performance.now()-startT) : baseT;
+    if(live>=17700 && live<=finalEnd){ extraZoom=Math.min(extraZoom+0.05,0.6); if(!playing) applyState(baseT); }
   });
 
-  // autoplay (muted visual autoplay is fine); reduced-motion users get a still + Play
-  if(reduce){
-    document.body.classList.add('cine');
-    cam({dur:1, cs:1.7, cx:0, cy:8, rx:2, ry:0});
-    hud.classList.add('in'); btnPlay.textContent='▶'; running=false;
-    openCard.querySelector('.foot').textContent='press ▶ to play (reduced motion on)';
-  } else {
-    setTimeout(start, 500);
-  }
+  applyState(0);
+  if(reduce){ applyState(6000); baseT=6000; btnPlay.textContent='▶'; hud.classList.add('in');
+    openCard.querySelector('.foot').textContent='press ▶ to play (reduced motion on)'; }
+  else { setTimeout(function(){ play(0); }, 400); }
 })();
 </script>
 </body>
