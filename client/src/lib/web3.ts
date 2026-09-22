@@ -79,6 +79,9 @@ export const contracts = {
     "0xE5e702641Ea86F4ae6cC3cDaeD2B886f976Be044",
   ),
   claimAdapter: envAddress("VITE_CLAIM_ADAPTER_ADDRESS", zeroAddress),
+  // Address that receives ETH from RBLX voucher-store purchases. Set this to
+  // the treasury/operator wallet that fulfils redeem codes into RBLX.
+  storeTreasury: envAddress("VITE_STORE_TREASURY_ADDRESS", zeroAddress),
   targetToken: envAddress(
     "VITE_TARGET_TOKEN_ADDRESS",
     "0xac3D5a9c7824a091b48AD5AAB101B0586444cb07",

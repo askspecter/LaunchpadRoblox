@@ -11,8 +11,10 @@ import {
   ExternalLink,
   FileText,
   Fuel,
+  Gift,
   Globe,
   ImagePlus,
+  KeyRound,
   LayoutGrid,
   LoaderCircle,
   Menu as MenuIcon,
@@ -20,7 +22,9 @@ import {
   Radio,
   Rocket,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
+  Ticket,
   Wallet,
   X,
   Zap,
@@ -29,13 +33,19 @@ import { toast } from "sonner";
 import {
   isAddress,
   isAddressEqual,
+  parseEther,
   parseUnits,
   toHex,
   zeroAddress,
   type Address,
   type Hash,
 } from "viem";
-import { useAccount, useSwitchChain, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useSendTransaction,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,7 +68,18 @@ import {
   timeAgo,
   type LaunchRecord,
 } from "@/lib/feed";
-import { formatEth, ROBUX_NAME, ROBUX_TICKER } from "@/lib/robux";
+import { formatEth, ROBUX_SYMBOL, ROBUX_NAME, ROBUX_TICKER } from "@/lib/robux";
+import {
+  STORE_PACKS,
+  deriveCode,
+  getOrders,
+  packTotalRobux,
+  recordOrder,
+  redeemCode,
+  subscribeOrders,
+  type StoreOrder,
+  type StorePack,
+} from "@/lib/store";
 
 type FormState = {
   name: string;
@@ -73,7 +94,7 @@ type FormState = {
 
 type ClaimMode = "escrow" | "curve" | "pool";
 type FeedFilter = "all" | "mine" | "buyback";
-type View = "feed" | "launch" | "claim" | "how" | "contracts";
+type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts";
 
 const CHAIN_ID = 4663;
 
@@ -90,6 +111,7 @@ const initialForm: FormState = {
 
 const MENU_LINKS: { view: View; label: string; icon: typeof LayoutGrid }[] = [
   { view: "feed", label: "Explore feed", icon: LayoutGrid },
+  { view: "store", label: "Robux store", icon: ShoppingBag },
   { view: "launch", label: "Launch a coin", icon: Rocket },
   { view: "claim", label: "Claim fees", icon: Zap },
   { view: "how", label: "How it works", icon: Sparkles },
@@ -98,7 +120,9 @@ const MENU_LINKS: { view: View; label: string; icon: typeof LayoutGrid }[] = [
 
 const viewFromHash = (): View => {
   const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
-  return h === "launch" || h === "claim" || h === "how" || h === "contracts" ? h : "feed";
+  return h === "store" || h === "launch" || h === "claim" || h === "how" || h === "contracts"
+    ? h
+    : "feed";
 };
 
 const shorten = (value: string, size = 5) =>
@@ -191,6 +215,7 @@ export default function Home() {
   const { address: account, chainId, isConnected } = useAccount();
   const { open } = useAppKit();
   const { writeContractAsync } = useWriteContract();
+  const { sendTransactionAsync } = useSendTransaction();
   const { switchChainAsync } = useSwitchChain();
 
   const [view, setView] = useState<View>(viewFromHash);
@@ -212,6 +237,18 @@ export default function Home() {
   const [feed, setFeed] = useState<LaunchRecord[]>([]);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
 
+  // Store state
+  const [selectedPack, setSelectedPack] = useState<string>("plus");
+  const [buying, setBuying] = useState<string | null>(null);
+  const [lastOrder, setLastOrder] = useState<StoreOrder | null>(null);
+  const [orders, setOrders] = useState<StoreOrder[]>([]);
+  const [redeemInput, setRedeemInput] = useState("");
+  const [redeemStatus, setRedeemStatus] = useState<
+    { kind: "ok"; order: StoreOrder } | { kind: "error"; message: string } | null
+  >(null);
+
+  const storeReady = !isAddressEqual(contracts.storeTreasury, zeroAddress);
+
   const adapterReady = !isAddressEqual(contracts.claimAdapter, zeroAddress);
   const isAdapterOwner = Boolean(
     account && adapterOwner && isAddressEqual(account, adapterOwner),
@@ -231,6 +268,11 @@ export default function Home() {
   useEffect(() => {
     setFeed(getLaunchFeed());
     return subscribeFeed(setFeed);
+  }, []);
+
+  useEffect(() => {
+    setOrders(getOrders());
+    return subscribeOrders(setOrders);
   }, []);
 
   useEffect(() => {
@@ -536,6 +578,60 @@ export default function Home() {
     }
   };
 
+  const buyPack = async (pack: StorePack) => {
+    if (!isConnected || !account) return open();
+    if (!storeReady)
+      return toast.error("Store is not configured. Set VITE_STORE_TREASURY_ADDRESS.");
+
+    setBuying(pack.id);
+    setLastOrder(null);
+    try {
+      await ensureChain();
+      const hash = await sendTransactionAsync({
+        chainId: CHAIN_ID,
+        to: contracts.storeTreasury,
+        value: parseEther(pack.priceEth),
+      });
+      toast.success("Payment submitted. Waiting for confirmation…");
+      await publicClient.waitForTransactionReceipt({ hash });
+      // The redeem code is derived from the confirmed payment hash, so it is a
+      // verifiable pointer back to this exact on-chain payment.
+      const order = recordOrder({
+        packId: pack.id,
+        robux: packTotalRobux(pack),
+        priceEth: pack.priceEth,
+        code: deriveCode(hash, pack.id),
+        txHash: hash,
+        buyer: account,
+      });
+      setLastOrder(order);
+      setLastHash(hash);
+      toast.success(`Paid in ETH — your ${ROBUX_TICKER} voucher code is ready.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message.slice(0, 160) : "Payment failed");
+    } finally {
+      setBuying(null);
+    }
+  };
+
+  const runRedeem = () => {
+    const result = redeemCode(redeemInput);
+    if (result.ok) {
+      setRedeemStatus({ kind: "ok", order: result.order });
+      setRedeemInput("");
+      toast.success(`Code redeemed for ${result.order.robux.toLocaleString()} ${ROBUX_TICKER}`);
+      return;
+    }
+    const message =
+      result.reason === "format"
+        ? "That code is not in the right format."
+        : result.reason === "already"
+          ? "This code has already been redeemed."
+          : "No purchase on this device matches that code.";
+    setRedeemStatus({ kind: "error", message });
+    toast.error(message);
+  };
+
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [field]: value }));
 
@@ -622,6 +718,128 @@ export default function Home() {
           ))}
         </div>
       )}
+    </section>
+  );
+
+  const storePage = (
+    <section className="page container">
+      <div className="page-head">
+        <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
+        <div className="eyebrow"><span /> <ShoppingBag size={13} /> Robux store</div>
+        <h1 className="page-title">Pay in ETH. Claim a {ROBUX_TICKER} code.</h1>
+        <p className="page-sub">Pick a pack, pay with native ETH from your own wallet, and the moment the payment confirms you get a redeem code bound to that transaction. Redeem it to receive {ROBUX_NAME} ({ROBUX_TICKER}) — the pair stays ETH the whole way.</p>
+      </div>
+
+      <div className="store-notice">
+        <ShieldCheck size={18} />
+        <p><strong>Read this first.</strong> The code redeems for the <b>{ROBUX_TICKER}</b> token on Robinhood Chain (a community token named &ldquo;Robux&rdquo;), <b>not</b> for Roblox in-game currency. Bloxpad is not affiliated with Roblox Corporation, and this is not a Roblox gift-card generator. Your wallet signs every payment; the app never holds a private key.</p>
+      </div>
+
+      <div className="store-grid">
+        {STORE_PACKS.map((pack) => {
+          const total = packTotalRobux(pack);
+          const active = selectedPack === pack.id;
+          return (
+            <article
+              key={pack.id}
+              className={`pack-card ${active ? "pack-active" : ""} ${pack.popular ? "pack-popular" : ""}`}
+              onClick={() => setSelectedPack(pack.id)}
+            >
+              {pack.popular && <span className="pack-flag">{pack.tagline}</span>}
+              <div className="pack-amount"><span className="pack-symbol">{ROBUX_SYMBOL}</span>{total.toLocaleString()}</div>
+              <div className="pack-sub">{ROBUX_TICKER} voucher{pack.bonusPct ? ` · +${pack.bonusPct}% bonus` : ""}</div>
+              <div className="pack-price"><Fuel size={13} /> {pack.priceEth} ETH</div>
+              <Button
+                className="pack-buy"
+                onClick={(e) => { e.stopPropagation(); buyPack(pack); }}
+                disabled={buying !== null || !storeReady}
+              >
+                {buying === pack.id ? <LoaderCircle className="animate-spin" size={16} /> : <ShoppingBag size={16} />}
+                {account ? "Pay with ETH" : "Connect to buy"}
+              </Button>
+              {!pack.popular && <span className="pack-tagline">{pack.tagline}</span>}
+            </article>
+          );
+        })}
+      </div>
+
+      {!storeReady && (
+        <p className="store-config-warn"><CircleAlert size={14} /> Store treasury is not configured yet. Set <code>VITE_STORE_TREASURY_ADDRESS</code> to the wallet that fulfils codes.</p>
+      )}
+
+      {lastOrder && (
+        <div className="code-card">
+          <div className="code-card-head"><Ticket size={18} /> Your voucher code</div>
+          <p className="code-card-sub">Save this code. Redeem it below to receive {lastOrder.robux.toLocaleString()} {ROBUX_TICKER}.</p>
+          <div className="code-value">
+            <code>{lastOrder.code}</code>
+            <button
+              className="code-copy"
+              onClick={async () => { await navigator.clipboard.writeText(lastOrder.code); toast.success("Code copied"); }}
+            >
+              <Copy size={15} /> Copy
+            </button>
+          </div>
+          <a className="tx-link" href={explorerTx(lastOrder.txHash)} target="_blank" rel="noreferrer">
+            View the payment on the explorer <ExternalLink size={14} />
+          </a>
+        </div>
+      )}
+
+      <div className="redeem-block">
+        <div className="redeem-panel">
+          <div className="redeem-head"><KeyRound size={18} /> Redeem a code</div>
+          <p className="redeem-sub">Paste a Bloxpad voucher code to claim its {ROBUX_TICKER}.</p>
+          <div className="redeem-row">
+            <input
+              value={redeemInput}
+              onChange={(e) => { setRedeemInput(e.target.value); setRedeemStatus(null); }}
+              placeholder="BLOX-XXXX-XXXX-XXXX-XXXX"
+              spellCheck={false}
+            />
+            <Button className="redeem-btn" onClick={runRedeem} disabled={!redeemInput.trim()}>
+              <Gift size={16} /> Redeem
+            </Button>
+          </div>
+          {redeemStatus?.kind === "ok" && (
+            <div className="redeem-result redeem-ok">
+              <Check size={15} /> Redeemed {redeemStatus.order.robux.toLocaleString()} {ROBUX_TICKER}. The operator delivers to the buyer wallet {shorten(redeemStatus.order.buyer, 4)}.
+            </div>
+          )}
+          {redeemStatus?.kind === "error" && (
+            <div className="redeem-result redeem-err"><CircleAlert size={15} /> {redeemStatus.message}</div>
+          )}
+        </div>
+
+        <div className="orders-panel">
+          <div className="orders-head"><Ticket size={15} /> My vouchers <span>{orders.length}</span></div>
+          {orders.length === 0 ? (
+            <p className="orders-empty">Vouchers you buy on this device show up here.</p>
+          ) : (
+            <ul className="orders-list">
+              {orders.slice(0, 8).map((order) => (
+                <li key={order.id} className="order-row">
+                  <div>
+                    <strong>{ROBUX_SYMBOL}{order.robux.toLocaleString()}</strong>
+                    <code>{order.code}</code>
+                  </div>
+                  <div className="order-meta">
+                    <span className={order.status === "redeemed" ? "order-redeemed" : "order-active"}>
+                      {order.status === "redeemed" ? "Redeemed" : "Active"}
+                    </span>
+                    <a href={explorerTx(order.txHash)} target="_blank" rel="noreferrer" aria-label="View payment"><ExternalLink size={13} /></a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div className="page-crosslink">
+        <span>Want the fee engine that funds {ROBUX_TICKER}?</span>
+        <button className="text-link" onClick={() => navigate("claim")}>Go to Claim fees <ArrowRight size={15} /></button>
+      </div>
     </section>
   );
 
@@ -880,6 +1098,7 @@ export default function Home() {
 
       <main id="top">
         {view === "feed" && feedPage}
+        {view === "store" && storePage}
         {view === "launch" && launchPage}
         {view === "claim" && claimPage}
         {view === "how" && howPage}
