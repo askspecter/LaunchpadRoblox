@@ -28,6 +28,7 @@ import {
   ShoppingBag,
   Sparkles,
   Ticket,
+  Trash2,
   Wallet,
   X,
   Zap,
@@ -37,6 +38,7 @@ import {
   isAddress,
   isAddressEqual,
   parseEther,
+  parseEventLogs,
   parseUnits,
   toHex,
   zeroAddress,
@@ -69,11 +71,13 @@ import {
 import {
   addLaunch,
   getLaunchFeed,
+  removeLaunch,
   subscribeFeed,
   timeAgo,
   type LaunchRecord,
 } from "@/lib/feed";
 import { formatEth, ROBUX_SYMBOL, ROBUX_NAME, ROBUX_TICKER } from "@/lib/robux";
+import { TokenDashboard } from "@/components/TokenDashboard";
 import {
   STORE_PACKS,
   deriveCode,
@@ -99,7 +103,7 @@ type FormState = {
 
 type ClaimMode = "escrow" | "curve" | "pool";
 type FeedFilter = "all" | "mine" | "buyback";
-type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts" | "docs";
+type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts" | "docs" | "token";
 
 const CHAIN_ID = 4663;
 
@@ -131,9 +135,15 @@ const MENU_LINKS: { view: View; label: string; icon: typeof LayoutGrid }[] = [
 
 const viewFromHash = (): View => {
   const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
+  if (h.startsWith("token/")) return "token";
   return h === "store" || h === "launch" || h === "claim" || h === "how" || h === "contracts" || h === "docs"
     ? h
     : "feed";
+};
+
+const tokenAddrFromHash = (): string => {
+  const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
+  return h.startsWith("token/") ? h.slice("token/".length) : "";
 };
 
 const shorten = (value: string, size = 5) =>
@@ -177,10 +187,14 @@ function AddressRow({ label, address }: { label: string; address: Address }) {
   );
 }
 
-function FeedCard({ record }: { record: LaunchRecord }) {
+function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: string) => void }) {
   const ticker = record.symbol.toUpperCase();
+  const openable = Boolean(record.tokenAddress && onOpen);
   return (
-    <article className="feed-card">
+    <article
+      className={`feed-card ${openable ? "feed-card-open" : ""}`}
+      onClick={openable ? () => onOpen!(record.tokenAddress as string) : undefined}
+    >
       <div className="feed-media">
         {record.logo ? (
           <img
@@ -195,6 +209,19 @@ function FeedCard({ record }: { record: LaunchRecord }) {
         <span className="feed-media-fallback">{ticker.slice(0, 4)}</span>
         <span className="feed-badge"><Zap size={11} /> {ROBUX_TICKER} loop</span>
         {record.buybackEnabled && <span className="feed-badge feed-badge-buyback">Buyback</span>}
+        <button
+          className="feed-remove"
+          aria-label="Remove from feed"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm(`Remove ${record.name} from your local feed?`)) {
+              removeLaunch(record.id);
+              toast.success("Removed from feed");
+            }
+          }}
+        >
+          <Trash2 size={13} />
+        </button>
       </div>
       <div className="feed-body">
         <div className="feed-heading">
@@ -206,7 +233,7 @@ function FeedCard({ record }: { record: LaunchRecord }) {
           <span className="feed-time">{timeAgo(record.createdAt)}</span>
         </div>
         {record.description && <p className="feed-desc">{record.description}</p>}
-        <div className="feed-links">
+        <div className="feed-links" onClick={(e) => e.stopPropagation()}>
           <a href={explorerTx(record.txHash)} target="_blank" rel="noreferrer">
             Transaction <ArrowUpRight size={12} />
           </a>
@@ -230,6 +257,7 @@ export default function Home() {
   const { switchChainAsync } = useSwitchChain();
 
   const [view, setView] = useState<View>(viewFromHash);
+  const [tokenAddr, setTokenAddr] = useState<string>(tokenAddrFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const [configs, setConfigs] = useState<LaunchConfig[]>([]);
   const [selectedConfig, setSelectedConfig] = useState<bigint>(BigInt(0));
@@ -284,7 +312,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const onHash = () => setView(viewFromHash());
+    const onHash = () => {
+      setView(viewFromHash());
+      setTokenAddr(tokenAddrFromHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -304,6 +335,15 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
 
+  const openToken = useCallback((addr: string) => {
+    setMenuOpen(false);
+    setTokenAddr(addr);
+    setView("token");
+    const target = `#/token/${addr}`;
+    if (window.location.hash !== target) window.location.hash = target;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
   const refreshProtocol = useCallback(async () => {
     setLoadingConfigs(true);
     try {
@@ -318,16 +358,20 @@ export default function Home() {
         }),
       );
 
-      const records = await readWithRetry(() =>
-        publicClient.multicall({
-          allowFailure: false,
-          contracts: Array.from({ length: Number(count) }, (_, index) => ({
-            address: contracts.ponsFactory,
-            abi: factoryAbi,
-            functionName: "getLaunchConfig" as const,
-            args: [BigInt(index)] as const,
-          })),
-        }),
+      // Read each config with an individual call rather than one multicall.
+      // Single reads succeed on this RPC where the batched multicall can fail
+      // in the browser, which is what left the config "not read from chain".
+      const records = await Promise.all(
+        Array.from({ length: Number(count) }, (_, index) =>
+          readWithRetry(() =>
+            publicClient.readContract({
+              address: contracts.ponsFactory,
+              abi: factoryAbi,
+              functionName: "getLaunchConfig",
+              args: [BigInt(index)],
+            }),
+          ),
+        ),
       );
 
       const open = records
@@ -460,26 +504,40 @@ export default function Home() {
     setLoading("launch");
     try {
       await ensureChain();
-      // Read the economics preview and the current launch fee live, with retry,
-      // so a rate-limited earlier read can never block an otherwise valid
-      // launch. previewLaunchEconomics also validates the selected config.
-      const [expectedEconomics, fee] = await Promise.all([
-        readWithRetry(() =>
-          publicClient.readContract({
-            address: contracts.ponsFactory,
-            abi: factoryAbi,
-            functionName: "previewLaunchEconomics",
-            args: [selectedConfig, contracts.pairToken],
-          }),
-        ),
-        readWithRetry(() =>
-          publicClient.readContract({
-            address: contracts.ponsFactory,
-            abi: factoryAbi,
-            functionName: "launchFee",
-          }),
-        ).catch(() => launchFee),
-      ]);
+      // Read the economics preview live (with retry); it also validates the
+      // selected config. previewLaunchEconomics must match what launchToken
+      // recomputes or the launch reverts.
+      const expectedEconomics = await readWithRetry(() =>
+        publicClient.readContract({
+          address: contracts.ponsFactory,
+          abi: factoryAbi,
+          functionName: "previewLaunchEconomics",
+          args: [selectedConfig, contracts.pairToken],
+        }),
+      );
+      // The launch fee is native ETH and MUST be sent as msg.value. Read it
+      // fresh; never silently fall back to 0, since sending 0 when the fee is
+      // non-zero makes launchToken revert (the real "launch failed" cause).
+      let fee: bigint;
+      try {
+        fee = await readWithRetry(
+          () =>
+            publicClient.readContract({
+              address: contracts.ponsFactory,
+              abi: factoryAbi,
+              functionName: "launchFee",
+            }),
+          6,
+        );
+      } catch {
+        if (launchFee > BigInt(0)) {
+          fee = launchFee;
+        } else {
+          throw new Error(
+            "Couldn't read the launch fee from the RPC. Set a dedicated VITE_ROBINHOOD_RPC_URL and try again.",
+          );
+        }
+      }
       const salt = toHex(crypto.getRandomValues(new Uint8Array(32)));
       const creatorTaxBps = Number(form.creatorTax);
       const hash = await writeContractAsync({
@@ -508,10 +566,35 @@ export default function Home() {
           },
           selectedConfig,
           contracts.pairToken,
+          [],
         ],
         value: fee,
       });
       setLastHash(hash);
+      toast.success("Launch submitted. Waiting for confirmation…");
+      // Only record the launch once the transaction actually confirms on chain.
+      // A submitted tx can still revert; adding to the feed on submission alone
+      // is what put failed launches in the feed.
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") {
+        return toast.error("Launch reverted on chain — nothing was added to the feed.");
+      }
+      // Resolve the launched token and curve from the TokenLaunched event so the
+      // token page can read on-chain state.
+      let tokenAddress: Address | undefined;
+      let curveAddress: Address | undefined;
+      try {
+        const logs = parseEventLogs({
+          abi: factoryAbi,
+          eventName: "TokenLaunched",
+          logs: receipt.logs,
+        });
+        const launched = logs[0]?.args as { token?: Address; curve?: Address } | undefined;
+        tokenAddress = launched?.token;
+        curveAddress = launched?.curve;
+      } catch {
+        /* event not found — feed still records the launch without addresses */
+      }
       addLaunch({
         name: form.name.trim(),
         symbol: form.symbol.trim().toUpperCase(),
@@ -525,9 +608,11 @@ export default function Home() {
         targetToken: contracts.targetToken,
         txHash: hash,
         creator: account,
+        tokenAddress,
+        curveAddress,
       });
       setForm(initialForm);
-      toast.success("Launch transaction submitted. Added to the live feed.");
+      toast.success("Launch confirmed. Added to the live feed.");
       navigate("feed");
     } catch (error) {
       toast.error(error instanceof Error ? error.message.slice(0, 160) : "Launch failed");
@@ -541,24 +626,18 @@ export default function Home() {
     try {
       if (claimMode === "curve") {
         if (!isAddress(curveAddress)) throw new Error("Invalid curve address.");
-        const [baseFee, creatorTax] = await publicClient.multicall({
-          allowFailure: false,
-          contracts: [
-            { address: curveAddress, abi: curveFeeAbi, functionName: "quoteFeeBalance" },
-            { address: curveAddress, abi: curveFeeAbi, functionName: "creatorTaxBalance" },
-          ],
-        });
+        const [baseFee, creatorTax] = await Promise.all([
+          readWithRetry(() => publicClient.readContract({ address: curveAddress, abi: curveFeeAbi, functionName: "quoteFeeBalance" })),
+          readWithRetry(() => publicClient.readContract({ address: curveAddress, abi: curveFeeAbi, functionName: "creatorTaxBalance" })),
+        ]);
         setPendingFees(baseFee + creatorTax);
       } else if (claimMode === "pool") {
         if (!/^0x[0-9a-fA-F]{64}$/.test(poolId))
           throw new Error("Pool ID must be bytes32 (0x plus 64 hex characters).");
-        const [baseFee, creatorTax] = await publicClient.multicall({
-          allowFailure: false,
-          contracts: [
-            { address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingFees", args: [poolId as Hash, zeroAddress] },
-            { address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingCreatorTax", args: [poolId as Hash, zeroAddress] },
-          ],
-        });
+        const [baseFee, creatorTax] = await Promise.all([
+          readWithRetry(() => publicClient.readContract({ address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingFees", args: [poolId as Hash, zeroAddress] })),
+          readWithRetry(() => publicClient.readContract({ address: contracts.ponsMemeHook, abi: hookFeeAbi, functionName: "pendingCreatorTax", args: [poolId as Hash, zeroAddress] })),
+        ]);
         setPendingFees(baseFee + creatorTax);
       } else {
         setPendingFees(claimable);
@@ -768,7 +847,7 @@ export default function Home() {
       ) : (
         <div className="feed-grid">
           {filteredFeed.map((record) => (
-            <FeedCard key={record.id} record={record} />
+            <FeedCard key={record.id} record={record} onOpen={openToken} />
           ))}
         </div>
       )}
@@ -1286,6 +1365,7 @@ export default function Home() {
         {view === "claim" && claimPage}
         {view === "how" && howPage}
         {view === "docs" && docsPage}
+        {view === "token" && <TokenDashboard address={tokenAddr} onBack={() => navigate("feed")} />}
         {view === "contracts" && contractsPage}
       </main>
 

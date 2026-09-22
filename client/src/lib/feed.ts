@@ -17,6 +17,10 @@ export type LaunchRecord = {
   txHash: Hash;
   creator: Address;
   createdAt: number;
+  // Resolved from the launch receipt when available, so a token page can read
+  // the curve and token state directly.
+  tokenAddress?: Address;
+  curveAddress?: Address;
 };
 
 const STORAGE_KEY = "robux-loop:launch-feed:v1";
@@ -60,6 +64,13 @@ export function addLaunch(record: Omit<LaunchRecord, "id" | "createdAt">): Launc
   const sorted = getLaunchFeed();
   listeners.forEach((fn) => fn(sorted));
   return full;
+}
+
+export function removeLaunch(id: string): void {
+  const next = safeRead().filter((record) => record.id !== id);
+  safeWrite(next);
+  const sorted = getLaunchFeed();
+  listeners.forEach((fn) => fn(sorted));
 }
 
 export function subscribeFeed(fn: Listener): () => void {
