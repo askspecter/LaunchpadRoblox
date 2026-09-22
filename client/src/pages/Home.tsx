@@ -4,19 +4,22 @@ import {
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
+  BookOpen,
   Box,
   Check,
   CircleAlert,
+  Coins,
   Copy,
   ExternalLink,
-  FileText,
   Fuel,
   Gift,
   Globe,
+  HelpCircle,
   ImagePlus,
   KeyRound,
   LayoutGrid,
   LoaderCircle,
+  Lock,
   Menu as MenuIcon,
   Network,
   Radio,
@@ -96,7 +99,7 @@ type FormState = {
 
 type ClaimMode = "escrow" | "curve" | "pool";
 type FeedFilter = "all" | "mine" | "buyback";
-type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts";
+type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts" | "docs";
 
 const CHAIN_ID = 4663;
 
@@ -122,12 +125,13 @@ const MENU_LINKS: { view: View; label: string; icon: typeof LayoutGrid }[] = [
   { view: "launch", label: "Launch a coin", icon: Rocket },
   { view: "claim", label: "Claim fees", icon: Zap },
   { view: "how", label: "How it works", icon: Sparkles },
+  { view: "docs", label: "Docs", icon: BookOpen },
   { view: "contracts", label: "Contracts", icon: ShieldCheck },
 ];
 
 const viewFromHash = (): View => {
   const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
-  return h === "store" || h === "launch" || h === "claim" || h === "how" || h === "contracts"
+  return h === "store" || h === "launch" || h === "claim" || h === "how" || h === "contracts" || h === "docs"
     ? h
     : "feed";
 };
@@ -1110,6 +1114,125 @@ export default function Home() {
     </section>
   );
 
+  const DOC_SECTIONS: { id: string; label: string; icon: typeof BookOpen }[] = [
+    { id: "doc-intro", label: "Overview", icon: BookOpen },
+    { id: "doc-start", label: "Quickstart", icon: Zap },
+    { id: "doc-launch", label: "Launching a coin", icon: Rocket },
+    { id: "doc-pair", label: "The RBLX pair", icon: Coins },
+    { id: "doc-store", label: "Robux store", icon: ShoppingBag },
+    { id: "doc-codes", label: "Redeem codes", icon: KeyRound },
+    { id: "doc-safety", label: "Non-custodial safety", icon: Lock },
+    { id: "doc-setup", label: "Network & setup", icon: Network },
+    { id: "doc-faq", label: "FAQ", icon: HelpCircle },
+  ];
+  const scrollToDoc = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const docsPage = (
+    <section className="page container">
+      <div className="page-head">
+        <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
+        <div className="eyebrow"><span /> <BookOpen size={13} /> Documentation</div>
+        <h1 className="page-title">Bloxpad, end to end.</h1>
+        <p className="page-sub">Everything the interface does, in plain language: how a launch works, how the Robux store works, how redeem codes are generated, and exactly where custody does and does not sit.</p>
+      </div>
+
+      <div className="docs-layout">
+        <aside className="docs-toc">
+          <span className="docs-toc-label">On this page</span>
+          {DOC_SECTIONS.map((s) => (
+            <button key={s.id} onClick={() => scrollToDoc(s.id)}>
+              <s.icon size={14} /> {s.label}
+            </button>
+          ))}
+        </aside>
+
+        <div className="docs-main">
+          <article id="doc-intro" className="docs-section">
+            <h2><BookOpen size={18} /> Overview</h2>
+            <p>Bloxpad is a launchpad interface on <b>Robinhood Chain</b> (chain ID 4663). You can launch a token in a single wallet signature, and you can run a Robux store on top of it. It is a front end only: there is no server holding your funds and no private key anywhere in the app.</p>
+            <p>The theme is Roblox, but the mechanics are ordinary on-chain mechanics. Bloxpad is an independent project and is <b>not affiliated with Roblox Corporation</b>, Robinhood Markets, or any token issuer. It never mints, holds, or guarantees Roblox in-game currency.</p>
+          </article>
+
+          <article id="doc-start" className="docs-section">
+            <h2><Zap size={18} /> Quickstart</h2>
+            <ol className="docs-steps">
+              <li><strong>Connect a wallet.</strong> Use the menu, then pick your wallet through the Reown modal. Make sure it is on Robinhood Chain.</li>
+              <li><strong>Launch a coin,</strong> or <strong>open the store.</strong> Launch creates a token paired with {PAIR_LABEL}; the store sells Robux packs for ETH.</li>
+              <li><strong>Sign.</strong> Every action is a transaction from your own wallet. Nothing moves until you approve it.</li>
+            </ol>
+          </article>
+
+          <article id="doc-launch" className="docs-section">
+            <h2><Rocket size={18} /> Launching a coin</h2>
+            <p>On the <button className="docs-link" onClick={() => navigate("launch")}>Launch</button> page you fill in the token name, ticker, description, logo, and an optional creator tax, then submit. The interface reads the live Pons launch config, pins the economics with <code>previewLaunchEconomics</code>, and sends <code>launchToken</code> from your wallet.</p>
+            <p>Creator fees are paid to the recipient you launch with. By default that is <b>your own wallet</b>, so fees arrive as {PAIR_LABEL}. You do not need to deploy any adapter for this.</p>
+            <div className="docs-callout"><CircleAlert size={16} /><p>If the launch button ever seems stuck, it is almost always the public RPC being rate limited. Set a dedicated <code>VITE_ROBINHOOD_RPC_URL</code> (see Network &amp; setup) and the reads go through.</p></div>
+          </article>
+
+          <article id="doc-pair" className="docs-section">
+            <h2><Coins size={18} /> The RBLX pair</h2>
+            <p>Every launch is denominated in a <b>pair (quote) asset</b>. Bloxpad is configured to pair with <b>RBLX</b> — the Roblox · Robinhood Token at <code>0xF0C4…1bE8</code> — so the bonding curve, trades, and creator fees are all in RBLX. You receive RBLX directly; there is no ETH-to-RBLX swap step.</p>
+            <p>The pair is configurable through <code>VITE_PAIR_TOKEN_ADDRESS</code>. Set it to the zero address to pair with native ETH instead. Always confirm the token has liquidity on the chosen Pons config before relying on it.</p>
+          </article>
+
+          <article id="doc-store" className="docs-section">
+            <h2><ShoppingBag size={18} /> Robux store</h2>
+            <p>The <button className="docs-link" onClick={() => navigate("store")}>Store</button> lets a buyer pay native ETH for a Robux pack. When the payment confirms, the app issues an <b>order code</b> bound to that exact transaction — the buyer's proof of purchase.</p>
+            <p><b>Delivery is manual.</b> Bloxpad does not mint, hold, auto-convert, or guarantee Robux. As the operator, you deliver Robux to the buyer yourself (for example with genuinely purchased Roblox gift cards) and then mark the order fulfilled. Only run a store if you can honour every order, and know that reselling Robux may conflict with Roblox's own terms — that responsibility is yours.</p>
+          </article>
+
+          <article id="doc-codes" className="docs-section">
+            <h2><KeyRound size={18} /> Redeem codes</h2>
+            <p>Each order code is derived from the payment transaction hash with keccak256 and encoded in a typo-resistant base32 with a checksum, formatted as <code>BLOX-XXXX-XXXX-XXXX-XXXX</code>. Because the code comes from the transaction, every code maps to exactly one real, explorer-verifiable payment and cannot be invented.</p>
+            <p>Codes and orders are stored in your browser on the device that made them. Marking a code fulfilled is a one-way, once-only action so an order cannot be delivered twice on that device.</p>
+          </article>
+
+          <article id="doc-safety" className="docs-section">
+            <h2><Lock size={18} /> Non-custodial safety</h2>
+            <ul className="docs-list">
+              <li><Check size={15} /> The app never asks for or stores a private key.</li>
+              <li><Check size={15} /> Every launch, payment, and fulfillment is signed from your own wallet.</li>
+              <li><Check size={15} /> There is no auto-signer, keeper, or backend wallet that can move your funds.</li>
+              <li><Check size={15} /> Every contract address is public — verify the whole flow on the <button className="docs-link" onClick={() => navigate("contracts")}>Contracts</button> page.</li>
+            </ul>
+          </article>
+
+          <article id="doc-setup" className="docs-section">
+            <h2><Network size={18} /> Network &amp; setup</h2>
+            <p>Bloxpad runs on Robinhood Chain (chain ID 4663, native gas token ETH). For a production deployment set these environment variables:</p>
+            <div className="docs-env">
+              <div><code>VITE_ROBINHOOD_RPC_URL</code><span>A dedicated RPC endpoint (Alchemy, Chainstack, QuickNode…). The public endpoint is rate limited.</span></div>
+              <div><code>VITE_REOWN_PROJECT_ID</code><span>Reown / WalletConnect project id from dashboard.reown.com.</span></div>
+              <div><code>VITE_PAIR_TOKEN_ADDRESS</code><span>Pair asset for launches. Defaults to RBLX; zero address for ETH.</span></div>
+              <div><code>VITE_STORE_TREASURY_ADDRESS</code><span>Wallet that receives ETH from store purchases.</span></div>
+            </div>
+            <p className="docs-note">On Vercel, <code>VITE_*</code> values are read at build time — set them, then redeploy for changes to take effect.</p>
+          </article>
+
+          <article id="doc-faq" className="docs-section">
+            <h2><HelpCircle size={18} /> FAQ</h2>
+            <div className="docs-faq">
+              <div><strong>Does Bloxpad give real Roblox Robux automatically?</strong><p>No. Nothing on-chain can mint Roblox currency. Store delivery is manual and handled by the operator. Any site promising automatic crypto-to-Robux is a scam.</p></div>
+              <div><strong>Why does it say "No adapter yet"?</strong><p>That is expected. The optional ETH-to-RBLX adapter is not needed when launches already pair with RBLX — fees arrive as RBLX in your wallet.</p></div>
+              <div><strong>Do you hold my funds?</strong><p>No. Bloxpad is a front end. Your wallet signs everything and custody never leaves it.</p></div>
+              <div><strong>Is RBLX here the Roblox stock?</strong><p>The default pair token is the Roblox · Robinhood Token (RBLX). It is a tokenized asset on Robinhood Chain, not Roblox in-game currency. Verify the address yourself.</p></div>
+            </div>
+          </article>
+
+          <div className="docs-foot">
+            <p>Bloxpad is an independent interface. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. Always verify contract addresses before you transact.</p>
+            <div className="docs-foot-links">
+              <button className="docs-link" onClick={() => navigate("launch")}>Launch a coin <ArrowRight size={14} /></button>
+              <button className="docs-link" onClick={() => navigate("contracts")}>See contracts <ArrowRight size={14} /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
   return (
     <div className="site-shell">
       <header className="topbar">
@@ -1143,9 +1266,6 @@ export default function Home() {
                 <ArrowRight size={15} className="drawer-arrow" />
               </button>
             ))}
-            <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">
-              <FileText size={17} /> Docs <ArrowUpRight size={15} className="drawer-arrow" />
-            </a>
           </nav>
           <div className="drawer-foot">
             <a className="drawer-social" href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">Follow @bloxpadapp on X</a>
@@ -1165,6 +1285,7 @@ export default function Home() {
         {view === "launch" && launchPage}
         {view === "claim" && claimPage}
         {view === "how" && howPage}
+        {view === "docs" && docsPage}
         {view === "contracts" && contractsPage}
       </main>
 
@@ -1173,7 +1294,7 @@ export default function Home() {
         <p>Bloxpad is an independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
         <div className="footer-links">
           <a href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">@bloxpadapp <ArrowUpRight size={13} /></a>
-          <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">Pons docs <ExternalLink size={13} /></a>
+          <button className="footer-docs-link" onClick={() => navigate("docs")}>Docs <ArrowRight size={13} /></button>
         </div>
       </footer>
     </div>
