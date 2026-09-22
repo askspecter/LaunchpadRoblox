@@ -812,7 +812,7 @@ export default function Home() {
             </a>
           </nav>
           <div className="drawer-foot">
-            <a className="drawer-social" href="https://x.com" target="_blank" rel="noreferrer">Follow updates on X</a>
+            <a className="drawer-social" href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">Follow @bloxpadapp on X</a>
             <Button className="drawer-launch" onClick={() => navigate("launch")}>
               <Rocket size={16} /> Launch a coin
             </Button>
@@ -834,7 +834,10 @@ export default function Home() {
       <footer className="footer container">
         <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/bloxpad-logo.png" alt="" /><span>BLOX<span className="brand-accent">PAD</span></span></button>
         <p>Bloxpad is an independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
-        <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">Pons docs <ExternalLink size={13} /></a>
+        <div className="footer-links">
+          <a href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">@bloxpadapp <ArrowUpRight size={13} /></a>
+          <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">Pons docs <ExternalLink size={13} /></a>
+        </div>
       </footer>
     </div>
   );
