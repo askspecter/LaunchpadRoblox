@@ -783,10 +783,6 @@ export default function Home() {
           <Button className="launch-cta-btn" onClick={() => navigate("launch")}>
             <Rocket size={15} /> Launch a coin
           </Button>
-          <Button className="wallet-button" onClick={() => open()}>
-            <Wallet size={16} />
-            <span className="wallet-label">{walletLabel}</span>
-          </Button>
           <button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <MenuIcon size={19} />
           </button>

@@ -58,11 +58,12 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; overflow-x: clip; }
   body {
     @apply bg-background text-foreground antialiased;
     margin: 0;
     min-width: 320px;
+    overflow-x: clip;
     font-family: var(--font-sans);
     background-image:
       radial-gradient(circle at 76% 4%, rgba(199, 255, 61, 0.07), transparent 23rem),
@@ -74,11 +75,27 @@
   ::selection { color: #0b0e08; background: #c7ff3d; }
 }
 
-@layer components {
-  .container { width: min(100% - 32px, 1240px); margin-inline: auto; }
+/* Unlayered so it wins over Tailwind's built-in .container utility. */
+.container { width: min(100% - 32px, 1240px); margin-inline: auto; }
+
+/* Reown AppKit modal is appended to <body>; keep it pinned to the viewport
+   so it never widens the page on mobile. */
+w3m-modal {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.site-shell { min-height: 100vh; overflow: hidden; }
+/* Sonner toaster: keep it inside the viewport on mobile (default mobile CSS
+   sets width:100% with a left offset, which spills a few px off-screen). */
+ol.toaster { max-width: 100vw; box-sizing: border-box; }
+@media (max-width: 600px) {
+  ol.toaster { left: 16px !important; right: 16px !important; width: auto !important; }
+}
+
+.site-shell { min-height: 100vh; overflow-x: clip; }
 .topbar {
   width: min(100% - 32px, 1240px);
   height: 78px;
@@ -100,21 +117,17 @@
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 .launch-cta-btn { height: 42px; border-radius: 999px; background: #c7ff3d; color: #101407; padding: 0 18px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 7px; transition: transform 160ms var(--ease-out), box-shadow 200ms var(--ease-out); }
 .launch-cta-btn:hover { box-shadow: 0 0 30px rgba(199,255,61,.28); }
-.launch-cta-btn:active, .menu-button:active { transform: scale(.96); }
-.wallet-button { height: 42px; border-radius: 999px; background: #f5f8f0; color: #10130f; padding: 0 16px; font-size: 12px; font-weight: 800; display: inline-flex; align-items: center; gap: 7px; transition: transform 160ms var(--ease-out), background 180ms var(--ease-out); }
-.wallet-button:hover { background: #dfe4d8; }
+.launch-cta-btn:active, .menu-button:active, .launch-button:active, .claim-button:active { transform: scale(.96); }
 .menu-button { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 999px; color: #eef3e7; border: 1px solid var(--border); background: rgba(255,255,255,.04); transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out), background 160ms var(--ease-out); }
 .menu-button:hover { color: #c7ff3d; border-color: rgba(199,255,61,.45); background: rgba(199,255,61,.06); }
-.nav-links { display: flex; align-items: center; gap: 34px; }
-.nav-links a { color: #a9b0a3; font-size: 13px; transition: color 180ms var(--ease-out); }
-.nav-links a:hover { color: #f5f8f0; }
-.wallet-button:active, .primary-cta:active, .launch-button:active, .claim-button:active { transform: scale(.97); }
 
 /* Slide-out menu */
-.drawer-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(4,6,4,.6); backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity 260ms var(--ease-out); }
-.drawer-overlay.open { opacity: 1; pointer-events: auto; }
-.drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(88vw, 380px); display: flex; flex-direction: column; background: #0d100c; border-left: 1px solid var(--border); box-shadow: -30px 0 90px rgba(0,0,0,.5); transform: translateX(100%); transition: transform 300ms var(--ease-out); }
-.drawer-overlay.open .drawer { transform: translateX(0); }
+.drawer-overlay { display: none; position: fixed; inset: 0; z-index: 60; overflow: hidden; background: rgba(4,6,4,.6); backdrop-filter: blur(3px); }
+.drawer-overlay.open { display: block; animation: overlayFade 220ms var(--ease-out); }
+.drawer { position: absolute; top: 0; right: 0; height: 100%; width: min(88vw, 380px); display: flex; flex-direction: column; background: #0d100c; border-left: 1px solid var(--border); box-shadow: -30px 0 90px rgba(0,0,0,.5); }
+.drawer-overlay.open .drawer { animation: drawerSlide 300ms var(--ease-out); }
+@keyframes overlayFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawerSlide { from { transform: translateX(100%); } to { transform: translateX(0); } }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 24px 24px 18px; border-bottom: 1px solid var(--border); }
 .drawer-head span { font: 650 18px var(--font-display); letter-spacing: -.02em; }
 .drawer-close { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; color: #aab3a4; border: 1px solid var(--border); transition: color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
@@ -235,7 +248,7 @@
 .page-sub { margin-top: 18px; color: #929a8e; font-size: 14px; line-height: 1.7; }
 .page-narrow { width: 100%; max-width: 760px; }
 .page-claim { width: 100%; max-width: 470px; }
-.page-claim .claim-panel { position: static; }
+.page-claim .claim-panel { position: relative; top: auto; }
 .page-crosslink { margin-top: 22px; padding: 15px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.02); }
 .page-crosslink span { color: #9ca495; font-size: 12px; }
 .page-crosslink .text-link { color: #c7ff3d; }
@@ -321,8 +334,7 @@
 }
 
 @media (max-width: 640px) {
-  .container, .topbar { width: min(100% - 24px, 1240px); }.topbar { height: 70px; }.wallet-button { padding-inline: 13px; }.brand { font-size: 13px; }.brand-icon { width: 28px; height: 28px; }
-  .wallet-label { display: none; }.wallet-button { width: 42px; justify-content: center; padding: 0; }
+  .container, .topbar { width: min(100% - 24px, 1240px); }.topbar { height: 66px; }.brand { font-size: 13px; }.brand-icon { width: 28px; height: 28px; }
   .hero { min-height: auto; padding-block: 72px; }.hero h1 { font-size: 50px; }.hero-lede { font-size: 14px; }.hero-actions { align-items: stretch; flex-direction: column; }.primary-cta { justify-content: space-between; }.hero-notes { gap: 12px; }
   .hero-visual { min-height: 390px; }.visual-card { width: 122px; padding: 13px; }.visual-card strong { margin-top: 17px; font-size: 15px; }.visual-pons { right: 0; }.orbit { left: 17%; }.orbit-two { left: 4%; }.visual-caption { right: 12px; }
   .ticker-strip { grid-template-columns: 1fr 1fr; }.ticker-strip div { padding: 17px 14px; }.ticker-strip div:last-child { grid-column: 1/-1; }
