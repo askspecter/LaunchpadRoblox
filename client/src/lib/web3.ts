@@ -173,9 +173,13 @@ export const curveAbi = parseAbi([
   "function realQuoteReserve() view returns (uint256)",
   "function graduationThreshold() view returns (uint256)",
   "function sellableTokens() view returns (uint256)",
+  "function reservedTokens() view returns (uint256)",
   "function readyToGraduate() view returns (bool)",
   "function graduated() view returns (bool)",
   "function feeBps() view returns (uint256)",
+  "function creatorTaxBps() view returns (uint256)",
+  "function buybackEnabled() view returns (bool)",
+  "function currentSnipeTaxBps(address recipient) view returns (uint256)",
 ]);
 
 // A launched token: standard ERC-20 plus creator metadata.

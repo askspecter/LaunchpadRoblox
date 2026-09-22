@@ -77,6 +77,7 @@ import {
   type LaunchRecord,
 } from "@/lib/feed";
 import { formatEth, ROBUX_SYMBOL, ROBUX_NAME, ROBUX_TICKER } from "@/lib/robux";
+import { TokenDashboard } from "@/components/TokenDashboard";
 import {
   STORE_PACKS,
   deriveCode,
@@ -102,7 +103,7 @@ type FormState = {
 
 type ClaimMode = "escrow" | "curve" | "pool";
 type FeedFilter = "all" | "mine" | "buyback";
-type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts" | "docs";
+type View = "feed" | "store" | "launch" | "claim" | "how" | "contracts" | "docs" | "token";
 
 const CHAIN_ID = 4663;
 
@@ -134,9 +135,15 @@ const MENU_LINKS: { view: View; label: string; icon: typeof LayoutGrid }[] = [
 
 const viewFromHash = (): View => {
   const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
+  if (h.startsWith("token/")) return "token";
   return h === "store" || h === "launch" || h === "claim" || h === "how" || h === "contracts" || h === "docs"
     ? h
     : "feed";
+};
+
+const tokenAddrFromHash = (): string => {
+  const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
+  return h.startsWith("token/") ? h.slice("token/".length) : "";
 };
 
 const shorten = (value: string, size = 5) =>
@@ -180,10 +187,14 @@ function AddressRow({ label, address }: { label: string; address: Address }) {
   );
 }
 
-function FeedCard({ record }: { record: LaunchRecord }) {
+function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: string) => void }) {
   const ticker = record.symbol.toUpperCase();
+  const openable = Boolean(record.tokenAddress && onOpen);
   return (
-    <article className="feed-card">
+    <article
+      className={`feed-card ${openable ? "feed-card-open" : ""}`}
+      onClick={openable ? () => onOpen!(record.tokenAddress as string) : undefined}
+    >
       <div className="feed-media">
         {record.logo ? (
           <img
@@ -222,7 +233,7 @@ function FeedCard({ record }: { record: LaunchRecord }) {
           <span className="feed-time">{timeAgo(record.createdAt)}</span>
         </div>
         {record.description && <p className="feed-desc">{record.description}</p>}
-        <div className="feed-links">
+        <div className="feed-links" onClick={(e) => e.stopPropagation()}>
           <a href={explorerTx(record.txHash)} target="_blank" rel="noreferrer">
             Transaction <ArrowUpRight size={12} />
           </a>
@@ -246,6 +257,7 @@ export default function Home() {
   const { switchChainAsync } = useSwitchChain();
 
   const [view, setView] = useState<View>(viewFromHash);
+  const [tokenAddr, setTokenAddr] = useState<string>(tokenAddrFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const [configs, setConfigs] = useState<LaunchConfig[]>([]);
   const [selectedConfig, setSelectedConfig] = useState<bigint>(BigInt(0));
@@ -300,7 +312,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const onHash = () => setView(viewFromHash());
+    const onHash = () => {
+      setView(viewFromHash());
+      setTokenAddr(tokenAddrFromHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -316,6 +331,15 @@ export default function Home() {
     setMenuOpen(false);
     setView(next);
     const target = next === "feed" ? "#/" : `#/${next}`;
+    if (window.location.hash !== target) window.location.hash = target;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  const openToken = useCallback((addr: string) => {
+    setMenuOpen(false);
+    setTokenAddr(addr);
+    setView("token");
+    const target = `#/token/${addr}`;
     if (window.location.hash !== target) window.location.hash = target;
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
@@ -809,7 +833,7 @@ export default function Home() {
       ) : (
         <div className="feed-grid">
           {filteredFeed.map((record) => (
-            <FeedCard key={record.id} record={record} />
+            <FeedCard key={record.id} record={record} onOpen={openToken} />
           ))}
         </div>
       )}
@@ -1327,6 +1351,7 @@ export default function Home() {
         {view === "claim" && claimPage}
         {view === "how" && howPage}
         {view === "docs" && docsPage}
+        {view === "token" && <TokenDashboard address={tokenAddr} onBack={() => navigate("feed")} />}
         {view === "contracts" && contractsPage}
       </main>
 
