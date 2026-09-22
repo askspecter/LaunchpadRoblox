@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Bloxpad Flythrough</title>
+<meta name="description" content="A self-playing cinematic review of the Bloxpad launchpad, ending on a deploy $test zoom-out." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" />
+<style>
+  :root{
+    --bg:#07040d; --bg2:#0a0611; --panel:#15101d; --panel2:#1b1428;
+    --ink:#f6f1ee; --muted:#9a90a8; --line:rgba(240,232,255,.14);
+    --accent:#ff7a1f; --accent2:#ff9d4d; --accentdim:#7a3a10;
+    --good:#4ade80; --ease:cubic-bezier(.23,1,.32,1); --easein:cubic-bezier(.6,.04,.98,.34);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+  }
+  .stage{
+    position:fixed; inset:0; overflow:hidden;
+    perspective:1600px; perspective-origin:50% 44%;
+    background:
+      radial-gradient(120% 90% at 50% 8%, rgba(255,122,31,.10), transparent 60%),
+      radial-gradient(140% 120% at 50% 120%, #120a1e 0%, var(--bg) 60%, #030109 100%);
+  }
+  /* ---------- the movable world / camera ---------- */
+  .world{
+    position:absolute; left:50%; top:50%;
+    width:1600px; height:1000px; margin:-500px 0 0 -800px;
+    transform-style:preserve-3d;
+    transform:
+      translate3d(calc(var(--cx,0)*1px), calc(var(--cy,0)*1px), 0)
+      scale(var(--cs,1))
+      rotateX(calc(var(--rx,0)*1deg)) rotateY(calc(var(--ry,0)*1deg));
+    transform-origin:50% 46%;
+    transition:transform var(--camdur,2200ms) var(--ease);
+    will-change:transform;
+  }
+  /* room / floor / back wall */
+  .room{position:absolute; inset:-400px -600px; transform-style:preserve-3d}
+  .wall{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(80% 60% at 50% 30%, rgba(255,122,31,.08), transparent 55%),
+      linear-gradient(180deg,#0c0716,#080411);
+    background-size:auto, auto, 46px 46px, 46px 46px;
+    background-image:
+      radial-gradient(80% 60% at 50% 30%, rgba(255,122,31,.09), transparent 55%),
+      linear-gradient(180deg,#0c0716,#080411),
+      linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+  }
+  .glow{
+    position:absolute; left:50%; top:40%; width:1300px; height:820px;
+    margin:-410px 0 0 -650px; border-radius:50%;
+    background:radial-gradient(closest-side, rgba(255,122,31,.22), rgba(255,122,31,.05) 55%, transparent 72%);
+    filter:blur(14px); opacity:.9; pointer-events:none;
+  }
+  .desk{
+    position:absolute; left:50%; bottom:96px; width:1360px; height:150px; margin-left:-680px;
+    transform:rotateX(64deg); transform-origin:50% 0%;
+    background:linear-gradient(180deg,#161020,#0c0815);
+    border-top:1px solid rgba(255,122,31,.22);
+    box-shadow:0 -1px 40px rgba(255,122,31,.10), inset 0 30px 60px rgba(0,0,0,.5);
+    border-radius:10px;
+  }
+  .desk::before{ /* desk light reflection */
+    content:""; position:absolute; left:50%; top:0; width:560px; height:120px; margin-left:-280px;
+    background:radial-gradient(closest-side, rgba(255,157,77,.20), transparent 70%); filter:blur(8px);
+  }
+  /* ---------- the PC monitor ---------- */
+  .monitor{
+    position:absolute; left:50%; top:206px; width:940px; height:568px; margin-left:-470px;
+    transform-style:preserve-3d;
+  }
+  .bezel{
+    position:absolute; inset:0; border-radius:20px; padding:16px;
+    background:linear-gradient(160deg,#241a33,#0f0a18 60%);
+    box-shadow:
+      0 40px 90px rgba(0,0,0,.6),
+      0 0 0 1px rgba(255,255,255,.05),
+      0 0 60px rgba(255,122,31,.18),
+      inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .screen{
+    position:absolute; inset:16px; border-radius:9px; overflow:hidden;
+    background:var(--bg2);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.05), inset 0 0 80px rgba(0,0,0,.6);
+  }
+  .cam-led{
+    position:absolute; top:24px; left:50%; width:6px; height:6px; margin-left:-3px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 10px var(--accent);
+  }
+  .stand{
+    position:absolute; left:50%; top:566px; width:26px; height:96px; margin-left:-13px;
+    background:linear-gradient(180deg,#20182e,#120c1c); border-radius:0 0 6px 6px;
+  }
+  .stand-foot{
+    position:absolute; left:50%; top:654px; width:220px; height:16px; margin-left:-110px;
+    background:linear-gradient(180deg,#1c1428,#0c0815); border-radius:40%;
+    box-shadow:0 20px 40px rgba(0,0,0,.5);
+  }
+  .keyboard{
+    position:absolute; left:50%; top:734px; width:520px; height:120px; margin-left:-260px;
+    transform:rotateX(62deg); transform-origin:50% 0%;
+    background:linear-gradient(180deg,#181121,#100b1a); border-radius:12px;
+    box-shadow:0 20px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05);
+    display:grid; grid-template-columns:repeat(14,1fr); grid-auto-rows:1fr; gap:5px; padding:12px;
+  }
+  .keyboard i{ background:linear-gradient(180deg,#221a30,#161020); border-radius:4px; box-shadow:inset 0 -2px 0 rgba(0,0,0,.4); }
+  .keyboard i.hot{ background:linear-gradient(180deg,#ff7a1f,#c65a12); box-shadow:0 0 10px rgba(255,122,31,.6); }
+
+  /* ---------- website inside the screen ---------- */
+  .site{position:absolute; inset:0; overflow:hidden; background:var(--bg2);}
+  .site-scroll{
+    position:absolute; left:0; top:0; width:100%;
+    transform:translateY(calc(var(--scroll,0)*1px));
+    transition:transform var(--camdur,2200ms) var(--ease);
+    will-change:transform;
+  }
+  .sitebar{
+    position:sticky; top:0; z-index:5; height:52px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 22px; background:rgba(10,6,17,.82); backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex; align-items:center; gap:9px; font-weight:700; letter-spacing:.04em; font-size:15px}
+  .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(150deg,#ff9d4d,#ff7a1f);
+    display:grid;place-items:center;color:#1c0f05;font-weight:700;box-shadow:0 0 16px rgba(255,122,31,.5)}
+  .brand b{color:var(--accent)}
+  .nav{display:flex; gap:16px; color:var(--muted); font-size:11.5px}
+  .nav span.on{color:var(--ink)}
+  .cta{height:32px;border-radius:999px;background:var(--accent);color:#1c0f05;font-weight:700;font-size:11px;
+    display:flex;align-items:center;gap:6px;padding:0 14px}
+  .sec{padding:30px 40px; min-height:210px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;margin-bottom:12px}
+  .eyebrow::before{content:"";width:22px;height:1px;background:var(--accent)}
+  h1.big{font-size:40px;line-height:1.02;margin:0 0 12px;letter-spacing:-.01em;text-wrap:balance}
+  .sub{color:var(--muted);font-size:14px;max-width:60ch;margin:0}
+  .grid{display:grid;gap:14px;margin-top:20px}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g2{grid-template-columns:1.2fr .8fr}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;overflow:hidden}
+  .card .media{height:78px;border-radius:10px;background:
+      radial-gradient(120% 120% at 20% 10%, rgba(255,122,31,.35), transparent 60%),
+      linear-gradient(140deg,#241a33,#120c1c);display:grid;place-items:center;font-weight:700;font-size:22px;color:#fff;margin-bottom:12px}
+  .badge{position:absolute;top:12px;right:12px;font-size:9.5px;background:rgba(255,122,31,.15);color:var(--accent2);
+    border:1px solid rgba(255,122,31,.3);border-radius:999px;padding:3px 8px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .tk{font-weight:700;font-size:15px}
+  .pill{font-size:10px;color:var(--muted)}
+  .price{color:var(--accent2);font-weight:700}
+  .pack{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;text-align:center;position:relative}
+  .pack.hot{border-color:rgba(255,122,31,.55);box-shadow:0 0 0 1px rgba(255,122,31,.25),0 20px 50px rgba(255,122,31,.12)}
+  .pack .rbx{font-size:26px;font-weight:700}
+  .pack .rbx small{color:var(--accent2)}
+  .pack .eth{color:var(--muted);font-size:12px;margin-top:4px}
+  .pack .buy{margin-top:14px;height:34px;border-radius:999px;background:var(--accent);color:#1c0f05;font-weight:700;
+    display:grid;place-items:center;font-size:12px}
+  .flag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);font-size:9.5px;background:var(--accent);
+    color:#1c0f05;font-weight:700;border-radius:999px;padding:3px 10px}
+  .field{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .field label{font-size:10.5px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .field .val{margin-top:6px;font-size:14px}
+  .field .val.dim{color:var(--muted)}
+  .flow{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative}
+  .flow .n{color:var(--accent);font-weight:700;font-size:12px;letter-spacing:.1em}
+  .flow h3{margin:8px 0 6px;font-size:15px}
+  .flow p{margin:0;color:var(--muted);font-size:11.5px;line-height:1.5}
+  .addr{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:12px 14px;margin-bottom:10px;font-size:12.5px}
+  .addr .k{color:var(--muted)}
+  .addr .v{color:var(--accent2)}
+  .warn{display:flex;gap:12px;background:rgba(255,103,92,.08);border:1px solid rgba(255,103,92,.3);border-radius:12px;
+    padding:14px;margin-top:14px;font-size:11.5px;color:#ffb4ae}
+
+  /* screen atmosphere */
+  .screen .scan{position:absolute;inset:0;pointer-events:none;z-index:8;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0 1px, transparent 1px 3px);mix-blend-mode:multiply;opacity:.5}
+  .screen .vig{position:absolute;inset:0;pointer-events:none;z-index:9;
+    box-shadow:inset 0 0 90px rgba(0,0,0,.55);border-radius:9px}
+  .screen .gloss{position:absolute;inset:0;pointer-events:none;z-index:9;
+    background:linear-gradient(120deg, rgba(255,255,255,.05), transparent 30%);}
+
+  /* ---------- deploy terminal overlay (inside screen) ---------- */
+  /* dimmer that darkens the site while the terminal is up */
+  .termdim{position:absolute;inset:0;z-index:11;background:rgba(4,2,9,.72);opacity:0;pointer-events:none;
+    transition:opacity .7s var(--ease)}
+  .termdim.show{opacity:1}
+  .term{
+    position:absolute; left:50%; top:50%; width:520px; margin:-150px 0 0 -260px; z-index:12;
+    background:#08050e; border:1px solid rgba(255,122,31,.55); border-radius:12px;
+    box-shadow:0 30px 80px rgba(0,0,0,.75), 0 0 70px rgba(255,122,31,.28), inset 0 0 0 1px rgba(255,255,255,.03);
+    opacity:0; transform:translateY(14px) scale(.98); pointer-events:none;
+    transition:opacity .7s var(--ease), transform .7s var(--ease);
+    overflow:hidden;
+  }
+  .term.show{opacity:1; transform:none}
+  .term-bar{display:flex;align-items:center;gap:7px;padding:10px 12px;border-bottom:1px solid var(--line);
+    font-size:11px;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
+  .term-body{padding:16px 16px 20px;font-size:14px;line-height:1.7}
+  .term-body .path{color:var(--accent2)}
+  .term-body .cmd{color:var(--ink)}
+  .caret{display:inline-block;width:9px;height:17px;background:var(--accent);vertical-align:-3px;margin-left:2px;
+    animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .term-out{margin-top:12px;color:var(--muted);font-size:12px;line-height:1.9;min-height:96px}
+  .term-out .ok{color:var(--good)}
+  .term-out .acc{color:var(--accent2)}
+  .term-out div{opacity:0;transform:translateY(4px);transition:opacity .35s var(--ease),transform .35s var(--ease)}
+  .term-out div.in{opacity:1;transform:none}
+
+  /* ---------- cinematic UI (fixed, outside world) ---------- */
+  .bars{position:fixed;left:0;right:0;pointer-events:none;z-index:30;background:#000}
+  .bars.top{top:0;height:0;transition:height .8s var(--ease)}
+  .bars.bot{bottom:0;height:0;transition:height .8s var(--ease)}
+  body.cine .bars.top{height:7vh}
+  body.cine .bars.bot{height:7vh}
+  .grain{position:fixed;inset:0;z-index:28;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .vignette{position:fixed;inset:0;z-index:27;pointer-events:none;box-shadow:inset 0 0 240px rgba(0,0,0,.65)}
+  .embers{position:fixed;inset:0;z-index:26;pointer-events:none;overflow:hidden}
+  .ember{position:absolute;bottom:-10px;width:3px;height:3px;border-radius:50%;background:var(--accent2);
+    box-shadow:0 0 8px var(--accent);opacity:0;animation:rise linear infinite}
+  @keyframes rise{0%{transform:translateY(0) translateX(0);opacity:0}
+    10%{opacity:.8}90%{opacity:.6}100%{transform:translateY(-102vh) translateX(var(--dx,0));opacity:0}}
+
+  /* caption chip */
+  .caption{position:fixed;left:0;right:0;bottom:calc(7vh + 26px);z-index:32;text-align:center;pointer-events:none}
+  .caption .chip{display:inline-flex;align-items:center;gap:12px;padding:9px 18px;border-radius:999px;
+    background:rgba(9,6,15,.6);border:1px solid rgba(255,122,31,.35);backdrop-filter:blur(8px);
+    opacity:0;transform:translateY(10px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+  .caption .chip.in{opacity:1;transform:none}
+  .caption .no{color:var(--accent);font-weight:700;letter-spacing:.12em;font-size:12px}
+  .caption .tt{font-size:14px;letter-spacing:.02em}
+  .caption .sep{width:1px;height:14px;background:var(--line)}
+
+  /* opening + closing title cards */
+  .titlecard{position:fixed;inset:0;z-index:33;display:grid;place-items:center;text-align:center;pointer-events:none;
+    transition:opacity .9s var(--ease)}
+  .titlecard .kick{color:var(--accent);letter-spacing:.4em;font-size:12px;text-transform:uppercase;margin-bottom:16px;
+    opacity:0;transform:translateY(8px);transition:.8s var(--ease)}
+  .titlecard .ttl{font-size:min(11vw,86px);line-height:.98;letter-spacing:-.02em;margin:0;text-wrap:balance;
+    opacity:0;transform:translateY(14px);transition:.9s var(--ease) .15s}
+  .titlecard .ttl b{color:var(--accent)}
+  .titlecard .foot{margin-top:20px;color:var(--muted);font-size:13px;letter-spacing:.08em;
+    opacity:0;transform:translateY(8px);transition:.8s var(--ease) .3s}
+  .titlecard.in .kick,.titlecard.in .ttl,.titlecard.in .foot{opacity:1;transform:none}
+  .titlecard.hide{opacity:0}
+  .end{display:none}
+  .end .replay{pointer-events:auto;margin-top:26px;display:inline-flex;align-items:center;gap:9px;
+    padding:12px 22px;border-radius:999px;background:var(--accent);color:#1c0f05;font-weight:700;font-size:14px;
+    border:0;cursor:pointer;box-shadow:0 12px 40px rgba(255,122,31,.35);transition:transform .2s var(--ease)}
+  .end .replay:hover{transform:translateY(-2px)}
+
+  /* zoom-out hint during typing */
+  .zoomhint{position:fixed;top:calc(7vh + 22px);left:50%;transform:translateX(-50%);z-index:32;
+    color:var(--accent2);font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:0;
+    transition:opacity .5s var(--ease)}
+  .zoomhint.in{opacity:.9}
+
+  /* progress + controls */
+  .hud{position:fixed;left:0;right:0;bottom:0;z-index:34;padding:0 18px 14px;display:flex;align-items:center;gap:14px;
+    opacity:0;transition:opacity .4s var(--ease)}
+  .hud.in{opacity:1}
+  .track{flex:1;height:4px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden}
+  .track > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));
+    box-shadow:0 0 12px rgba(255,122,31,.6)}
+  .hud button{background:rgba(255,255,255,.08);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    width:34px;height:30px;cursor:pointer;font-size:13px;display:grid;place-items:center}
+  .hud button:hover{background:rgba(255,255,255,.14)}
+  .hud .clock{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;min-width:74px;text-align:right}
+
+  @media (max-width:520px){
+    .caption .tt{font-size:12px}
+    .term{width:min(88vw,520px)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .world,.site-scroll,.term{transition-duration:1ms !important}
+    .ember{animation:none !important}
+  }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="world" id="world">
+      <div class="room">
+        <div class="wall"></div>
+      </div>
+      <div class="glow"></div>
+      <div class="desk"></div>
+
+      <div class="monitor">
+        <div class="bezel">
+          <div class="cam-led"></div>
+          <div class="screen">
+            <div class="site">
+              <div class="site-scroll" id="siteScroll">
+                <!-- top bar -->
+                <div class="sitebar">
+                  <div class="brand"><span class="logo">◈</span>Blox<b>pad</b></div>
+                  <div class="nav">
+                    <span class="on">Explore feed</span><span>Robux store</span>
+                    <span>Launch</span><span>Claim</span><span>How it works</span><span>Contracts</span>
+                  </div>
+                  <div class="cta">🚀 Launch a coin</div>
+                </div>
+
+                <!-- 01 feed -->
+                <section class="sec" data-sec="feed">
+                  <div class="eyebrow">Live feed</div>
+                  <h1 class="big">Fresh launches.</h1>
+                  <p class="sub">Coins launched through this interface, paired with ETH so creator fees accrue in ETH — then loop into Robux.</p>
+                  <div class="grid g3">
+                    <div class="card"><span class="badge">⚡ RBLX loop</span><div class="media">BLOX</div>
+                      <div class="row"><span class="tk">BloxRocket</span><span class="price">+128%</span></div>
+                      <div class="pill">$BLOX · 2m ago</div></div>
+                    <div class="card"><span class="badge">Buyback</span><div class="media">R$</div>
+                      <div class="row"><span class="tk">RobuxKing</span><span class="price">+64%</span></div>
+                      <div class="pill">$RBK · 6m ago</div></div>
+                    <div class="card"><span class="badge">⚡ RBLX loop</span><div class="media">TYCN</div>
+                      <div class="row"><span class="tk">TycoonPad</span><span class="price">+312%</span></div>
+                      <div class="pill">$TYCN · 11m ago</div></div>
+                  </div>
+                </section>
+
+                <!-- 02 store -->
+                <section class="sec" data-sec="store">
+                  <div class="eyebrow">Robux store</div>
+                  <h1 class="big">Buy Robux with ETH.</h1>
+                  <p class="sub">Pick a pack, pay native ETH, get an order code bound to your transaction. Delivery is manual by the operator.</p>
+                  <div class="grid g4">
+                    <div class="pack"><div class="rbx">400 <small>R$</small></div><div class="eth">0.004 ETH</div><div class="buy">Buy pack</div></div>
+                    <div class="pack hot"><span class="flag">Most popular</span><div class="rbx">1,700 <small>R$</small></div><div class="eth">0.015 ETH · +10%</div><div class="buy">Buy pack</div></div>
+                    <div class="pack"><div class="rbx">4,500 <small>R$</small></div><div class="eth">0.038 ETH</div><div class="buy">Buy pack</div></div>
+                    <div class="pack"><div class="rbx">10,000 <small>R$</small></div><div class="eth">0.082 ETH · +15%</div><div class="buy">Buy pack</div></div>
+                  </div>
+                </section>
+
+                <!-- 03 launch -->
+                <section class="sec" data-sec="launch">
+                  <div class="eyebrow">Launch console</div>
+                  <h1 class="big">Launch a coin.</h1>
+                  <p class="sub">Create a token on Pons V2 paired with ETH. Creator fees route to your dedicated adapter — one wallet signature.</p>
+                  <div class="grid g2">
+                    <div>
+                      <div class="field"><label>Token name</label><div class="val">Bloxpad Genesis</div></div>
+                      <div class="field"><label>Ticker</label><div class="val">$GENE</div></div>
+                      <div class="field"><label>Creator tax</label><div class="val dim">0% · buyback enabled</div></div>
+                    </div>
+                    <div class="card" style="display:flex;flex-direction:column;justify-content:center;gap:10px">
+                      <div class="pill" style="color:var(--good)">● Adapter ready</div>
+                      <div style="font-size:13px;color:var(--muted)">canLaunch ✓ &nbsp; economics pinned ✓</div>
+                      <div class="cta" style="height:38px;justify-content:center">Sign &amp; launch →</div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- 04 how -->
+                <section class="sec" data-sec="how">
+                  <div class="eyebrow">How it works</div>
+                  <h1 class="big">How the fee loop works.</h1>
+                  <p class="sub">Pons prices the curve in ETH. The one thing that changes is the creator-fee recipient: an adapter contract.</p>
+                  <div class="grid g4">
+                    <div class="flow"><div class="n">01</div><h3>Launch on Pons</h3><p>Token created with an ETH pair, fees pointed at the adapter.</p></div>
+                    <div class="flow"><div class="n">02</div><h3>Fees accrue</h3><p>Trading fees sweep into the escrow ledger the adapter holds.</p></div>
+                    <div class="flow"><div class="n">03</div><h3>Claim &amp; buy</h3><p>Owner triggers the claim; ETH swaps to RBLX with min-out.</p></div>
+                    <div class="flow"><div class="n">04</div><h3>Into treasury</h3><p>RBLX lands in the treasury. Adapter holds no balance after.</p></div>
+                  </div>
+                </section>
+
+                <!-- 05 contracts -->
+                <section class="sec" data-sec="contracts">
+                  <div class="eyebrow">Contracts</div>
+                  <h1 class="big">Addresses, not promises.</h1>
+                  <div style="margin-top:16px">
+                    <div class="addr"><span class="k">Pons V2 Factory</span><span class="v">0x7eD5…EC7e</span></div>
+                    <div class="addr"><span class="k">Fee Escrow</span><span class="v">0xd3AF…Ac9e</span></div>
+                    <div class="addr"><span class="k">Uniswap SwapRouter02</span><span class="v">0xcaf6…5cb2</span></div>
+                    <div class="addr"><span class="k">Target Robux (RBLX)</span><span class="v">0xac3D…cb07</span></div>
+                  </div>
+                  <div class="warn">⚠ Two assets share the RBLX symbol — confirm the target before deploying an adapter.</div>
+                </section>
+
+                <div style="height:60px"></div>
+              </div><!-- /site-scroll -->
+
+              <div class="termdim" id="termdim"></div>
+              <!-- deploy terminal -->
+              <div class="term" id="term">
+                <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+                  &nbsp; bloxpad — deploy</div>
+                <div class="term-body">
+                  <div><span class="path">bloxpad@robinhood</span>:<span style="color:var(--accent2)">~</span>$
+                    <span class="cmd" id="typed"></span><span class="caret" id="caret"></span></div>
+                  <div class="term-out" id="out">
+                    <div data-l="0"><span class="acc">→</span> resolving adapter for <span class="acc">$test</span>…</div>
+                    <div data-l="1"><span class="acc">→</span> compiling ClaimToRBLXAdapter … <span class="ok">ok</span></div>
+                    <div data-l="2"><span class="acc">→</span> pair = ETH · target = RBLX · fee = 10000</div>
+                    <div data-l="3"><span class="acc">→</span> broadcasting on Robinhood Chain (4663)…</div>
+                    <div data-l="4"><span class="ok">✓ deployed</span> · tx 0x9a3f…be21 · <span class="acc">$test</span> is live</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="scan"></div><div class="vig"></div><div class="gloss"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stand"></div>
+      <div class="stand-foot"></div>
+      <div class="keyboard" id="keyboard"></div>
+    </div><!-- /world -->
+  </div><!-- /stage -->
+
+  <!-- fixed cinematic layers -->
+  <div class="embers" id="embers"></div>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+  <div class="bars top"></div>
+  <div class="bars bot"></div>
+
+  <div class="zoomhint" id="zoomhint">◄ zoom out ►</div>
+
+  <div class="caption" id="caption">
+    <div class="chip"><span class="no" id="capNo">01</span><span class="sep"></span><span class="tt" id="capTt">Live feed</span></div>
+  </div>
+
+  <div class="titlecard in" id="opencard">
+    <div>
+      <div class="kick">Bloxpad · Robinhood Chain</div>
+      <h1 class="ttl">A cinematic<br>walk through <b>Bloxpad</b></h1>
+      <div class="foot">launchpad review — press ▶ to begin</div>
+    </div>
+  </div>
+
+  <div class="titlecard end" id="endcard">
+    <div>
+      <div class="kick" id="endKick">Deploy complete</div>
+      <h1 class="ttl"><b>$test</b> shipped.</h1>
+      <div class="foot">non-custodial · one signature · Robux loop</div>
+      <button class="replay" id="replay">↻ Replay</button>
+    </div>
+  </div>
+
+  <div class="hud" id="hud">
+    <button id="btnPlay" aria-label="Play or pause">⏸</button>
+    <div class="track"><i id="bar"></i></div>
+    <span class="clock" id="clock">0:00 / 0:27</span>
+  </div>
+
+<script>
+(function(){
+  var W = document.getElementById('world');
+  var scroll = document.getElementById('siteScroll');
+  var term = document.getElementById('term');
+  var typed = document.getElementById('typed');
+  var caret = document.getElementById('caret');
+  var out = document.getElementById('out');
+  var cap = document.getElementById('caption').querySelector('.chip');
+  var capNo = document.getElementById('capNo');
+  var capTt = document.getElementById('capTt');
+  var openCard = document.getElementById('opencard');
+  var endCard = document.getElementById('endcard');
+  var zoomhint = document.getElementById('zoomhint');
+  var bar = document.getElementById('bar');
+  var clock = document.getElementById('clock');
+  var hud = document.getElementById('hud');
+  var btnPlay = document.getElementById('btnPlay');
+  var kb = document.getElementById('keyboard');
+  var termdim = document.getElementById('termdim');
+
+  // Measure real section positions so captions line up with what's on screen.
+  // Screen viewport inside the bezel is ~536px tall; park each section's eyebrow
+  // near the top with a small margin.
+  var SCREEN_H = 536, TOPPAD = 34;
+  var secOffset = {};
+  function measure(){
+    ['feed','store','launch','how','contracts'].forEach(function(id){
+      var el = document.querySelector('[data-sec="'+id+'"]');
+      secOffset[id] = el ? -(el.offsetTop - TOPPAD) : 0;
+    });
+  }
+  measure(); window.addEventListener('load', measure);
+
+  var reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  // build keyboard keys
+  for(var i=0;i<42;i++){ kb.appendChild(document.createElement('i')); }
+  var keys = kb.querySelectorAll('i');
+
+  // embers
+  var eb = document.getElementById('embers');
+  for(var e=0;e<26;e++){
+    var d = document.createElement('div'); d.className='ember';
+    d.style.left = Math.random()*100+'%';
+    d.style.animationDuration = (7+Math.random()*9)+'s';
+    d.style.animationDelay = (-Math.random()*12)+'s';
+    d.style.setProperty('--dx',(Math.random()*80-40)+'px');
+    d.style.width = d.style.height = (2+Math.random()*3)+'px';
+    eb.appendChild(d);
+  }
+
+  function cam(o){
+    if(o.dur!=null) W.style.setProperty('--camdur', o.dur+'ms');
+    if(o.cs!=null) W.style.setProperty('--cs', o.cs);
+    if(o.cx!=null) W.style.setProperty('--cx', o.cx);
+    if(o.cy!=null) W.style.setProperty('--cy', o.cy);
+    if(o.rx!=null) W.style.setProperty('--rx', o.rx);
+    if(o.ry!=null) W.style.setProperty('--ry', o.ry);
+  }
+  function sscroll(px,dur){
+    scroll.style.setProperty('--camdur',(dur||1800)+'ms');
+    scroll.style.setProperty('--scroll', px);
+  }
+  function showCap(no,tt){
+    cap.classList.remove('in');
+    setTimeout(function(){ capNo.textContent=no; capTt.textContent=tt; cap.classList.add('in'); }, 260);
+  }
+  function hideCap(){ cap.classList.remove('in'); }
+
+  // TOTAL runtime approx
+  var TOTAL = 27000;
+
+  // ---- timeline as a list of steps (delay from previous, action) ----
+  var timers = [];
+  function at(t,fn){ timers.push(setTimeout(fn,t)); }
+  function clearAll(){ timers.forEach(clearTimeout); timers=[]; }
+
+  var running=false, paused=false, startTime=0, elapsedBase=0, raf;
+
+  function fmt(ms){ ms=Math.max(0,ms); var s=Math.floor(ms/1000); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
+  function tick(){
+    if(!running||paused) return;
+    var el = elapsedBase + (performance.now()-startTime);
+    var p = Math.min(1, el/TOTAL);
+    bar.style.width = (p*100)+'%';
+    clock.textContent = fmt(el)+' / '+fmt(TOTAL);
+    raf = requestAnimationFrame(tick);
+  }
+
+  function typeDeploy(startT){
+    // "deploy $test" -> each char zooms the camera OUT one notch
+    var text = 'deploy $test';
+    var chars = text.split('');
+    // camera zoom-out schedule: from tight-on-terminal to whole room
+    var zStart = 2.35, zEnd = 0.72;
+    var per = 300; // ms per char
+    zoomhint.classList.add('in');
+    for(var c=0;c<chars.length;c++){
+      (function(idx){
+        at(startT + idx*per, function(){
+          typed.textContent = text.slice(0, idx+1);
+          // discrete zoom-out step on every keystroke
+          var z = zStart + (zEnd - zStart) * ((idx+1)/chars.length);
+          var driftX = (idx%2? 6 : -6);
+          cam({dur:per+140, cs:z, cx:driftX, cy:6 - idx*1.2, rx:2 + idx*0.5, ry:(idx%2? 3 : -3)});
+          // flash a keyboard key
+          var k = keys[(idx*3+5)%keys.length]; if(k){ k.classList.add('hot'); setTimeout(function(){k.classList.remove('hot');},220); }
+        });
+      })(c);
+    }
+    var doneT = startT + chars.length*per;
+    // print output lines
+    ['0','1','2','3','4'].forEach(function(l,i){
+      at(doneT + 260 + i*520, function(){
+        var line = out.querySelector('[data-l="'+l+'"]'); if(line) line.classList.add('in');
+      });
+    });
+    at(doneT + 260, function(){ zoomhint.classList.remove('in'); });
+    return doneT + 260 + 5*520; // when outputs finished
+  }
+
+  function runShow(){
+    running=true; paused=false; btnPlay.textContent='⏸';
+    endCard.style.display='none';
+    endCard.classList.remove('in');
+    hud.classList.add('in');
+    elapsedBase=0; startTime=performance.now();
+    cancelAnimationFrame(raf); tick();
+    document.body.classList.add('cine');
+
+    // reset state
+    typed.textContent=''; caret.style.display='inline-block';
+    out.querySelectorAll('[data-l]').forEach(function(n){n.classList.remove('in');});
+    term.classList.remove('show'); termdim.classList.remove('show'); zoomhint.classList.remove('in');
+    // opening wide shot
+    cam({dur:60, cs:0.86, cx:0, cy:0, rx:8, ry:0}); sscroll(0,60);
+    openCard.style.display='grid'; openCard.classList.add('in'); openCard.classList.remove('hide');
+
+    // 1. hold opening title, subtle drift
+    at(60, function(){ cam({dur:2600, cs:0.92, cx:0, cy:-6, rx:6, ry:-2}); });
+    at(1700, function(){ openCard.classList.add('hide'); });
+    at(2500, function(){ openCard.style.display='none'; });
+
+    // 2. push in to the screen
+    at(2200, function(){ measure(); sscroll(secOffset.feed,10); cam({dur:2400, cs:1.72, cx:0, cy:8, rx:2, ry:0}); showCap('01','Live feed'); });
+
+    // 3. tour sections (scroll the site to each real section + gentle camera drift)
+    at(5000, function(){ sscroll(secOffset.feed,2200); cam({dur:2400, cs:1.86, cx:-14, cy:10, rx:1, ry:3}); });
+    at(7300, function(){ sscroll(secOffset.store,2200); cam({dur:2400, cs:1.8, cx:14, cy:8, rx:1, ry:-3}); showCap('02','Robux store'); });
+    at(9800, function(){ sscroll(secOffset.launch,2200); cam({dur:2400, cs:1.9, cx:-12, cy:10, rx:1, ry:2}); showCap('03','Launch a coin'); });
+    at(12300,function(){ sscroll(secOffset.how,2200); cam({dur:2400, cs:1.82, cx:12, cy:8, rx:1, ry:-2}); showCap('04','The fee loop'); });
+    at(14800,function(){ sscroll(secOffset.contracts,2200); cam({dur:2400, cs:1.9, cx:-10, cy:10, rx:1, ry:2}); showCap('05','Contracts'); });
+
+    // 4. move to deploy — recenter, dim the site, terminal rises, tighten
+    at(17300,function(){ hideCap(); sscroll(secOffset.launch,1400); cam({dur:1600, cs:2.35, cx:0, cy:6, rx:2, ry:0}); });
+    at(17900,function(){ termdim.classList.add('show'); term.classList.add('show'); showCap('06','Deploy'); });
+
+    // 5. type "deploy $test" — zoom out on every keystroke
+    var typeStart = 18800;
+    var endOfType = typeDeploy(typeStart);
+
+    // 6. final wide reveal + end card
+    at(endOfType + 200, function(){
+      cam({dur:2000, cs:0.7, cx:0, cy:0, rx:9, ry:0}); hideCap();
+    });
+    at(endOfType + 1400, function(){
+      endCard.style.display='grid'; void endCard.offsetWidth; endCard.classList.add('in');
+    });
+    at(endOfType + 1500, function(){
+      running=false; bar.style.width='100%'; clock.textContent=fmt(TOTAL)+' / '+fmt(TOTAL);
+      cancelAnimationFrame(raf);
+    });
+    TOTAL = endOfType + 1500;
+  }
+
+  function start(){ clearAll(); runShow(); }
+
+  function togglePause(){
+    if(!running && !paused){ start(); return; }
+    paused=!paused;
+    if(paused){
+      btnPlay.textContent='▶'; elapsedBase += performance.now()-startTime; cancelAnimationFrame(raf);
+      // freeze pending timers
+      clearAll(); pausedAtWasRunning=true;
+    } else {
+      btnPlay.textContent='⏸'; startTime=performance.now(); tick();
+      // simplest robust resume: restart from beginning is jarring, so just resume clock;
+      // for a short film we accept restart-on-pause-resume only if it was paused mid-run
+    }
+  }
+  var pausedAtWasRunning=false;
+
+  btnPlay.addEventListener('click', function(){
+    if(endCard.classList.contains('in')){ start(); return; }
+    if(!running){ start(); return; }
+    // pause = freeze camera by stopping clock only (visual keeps last target)
+    if(!paused){ paused=true; btnPlay.textContent='▶'; elapsedBase+=performance.now()-startTime; cancelAnimationFrame(raf); }
+    else { paused=false; btnPlay.textContent='⏸'; startTime=performance.now(); tick(); }
+  });
+
+  document.getElementById('replay').addEventListener('click', start);
+
+  // Interactive flourish: while the deploy terminal is visible, real key presses also nudge a zoom-out.
+  var extraZoom=0;
+  window.addEventListener('keydown', function(ev){
+    if(!term.classList.contains('show')) return;
+    if(ev.key==='Enter' || ev.key===' ') ev.preventDefault();
+    extraZoom = Math.min(extraZoom+0.04, 0.5);
+    var cur = parseFloat(getComputedStyle(W).getPropertyValue('--cs'))||1.5;
+    cam({dur:280, cs:Math.max(0.6, cur-0.05)});
+  });
+
+  // autoplay (muted visual autoplay is fine); reduced-motion users get a still + Play
+  if(reduce){
+    document.body.classList.add('cine');
+    cam({dur:1, cs:1.7, cx:0, cy:8, rx:2, ry:0});
+    hud.classList.add('in'); btnPlay.textContent='▶'; running=false;
+    openCard.querySelector('.foot').textContent='press ▶ to play (reduced motion on)';
+  } else {
+    setTimeout(start, 500);
+  }
+})();
+</script>
+</body>
+</html>
