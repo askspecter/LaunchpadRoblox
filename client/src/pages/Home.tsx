@@ -504,26 +504,40 @@ export default function Home() {
     setLoading("launch");
     try {
       await ensureChain();
-      // Read the economics preview and the current launch fee live, with retry,
-      // so a rate-limited earlier read can never block an otherwise valid
-      // launch. previewLaunchEconomics also validates the selected config.
-      const [expectedEconomics, fee] = await Promise.all([
-        readWithRetry(() =>
-          publicClient.readContract({
-            address: contracts.ponsFactory,
-            abi: factoryAbi,
-            functionName: "previewLaunchEconomics",
-            args: [selectedConfig, contracts.pairToken],
-          }),
-        ),
-        readWithRetry(() =>
-          publicClient.readContract({
-            address: contracts.ponsFactory,
-            abi: factoryAbi,
-            functionName: "launchFee",
-          }),
-        ).catch(() => launchFee),
-      ]);
+      // Read the economics preview live (with retry); it also validates the
+      // selected config. previewLaunchEconomics must match what launchToken
+      // recomputes or the launch reverts.
+      const expectedEconomics = await readWithRetry(() =>
+        publicClient.readContract({
+          address: contracts.ponsFactory,
+          abi: factoryAbi,
+          functionName: "previewLaunchEconomics",
+          args: [selectedConfig, contracts.pairToken],
+        }),
+      );
+      // The launch fee is native ETH and MUST be sent as msg.value. Read it
+      // fresh; never silently fall back to 0, since sending 0 when the fee is
+      // non-zero makes launchToken revert (the real "launch failed" cause).
+      let fee: bigint;
+      try {
+        fee = await readWithRetry(
+          () =>
+            publicClient.readContract({
+              address: contracts.ponsFactory,
+              abi: factoryAbi,
+              functionName: "launchFee",
+            }),
+          6,
+        );
+      } catch {
+        if (launchFee > BigInt(0)) {
+          fee = launchFee;
+        } else {
+          throw new Error(
+            "Couldn't read the launch fee from the RPC. Set a dedicated VITE_ROBINHOOD_RPC_URL and try again.",
+          );
+        }
+      }
       const salt = toHex(crypto.getRandomValues(new Uint8Array(32)));
       const creatorTaxBps = Number(form.creatorTax);
       const hash = await writeContractAsync({
