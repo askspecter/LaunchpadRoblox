@@ -9,16 +9,20 @@ import {
   CircleAlert,
   Copy,
   ExternalLink,
+  FileText,
   Fuel,
   Globe,
+  LayoutGrid,
   LoaderCircle,
   LockKeyhole,
+  Menu as MenuIcon,
   Network,
   Radio,
   Rocket,
   ShieldCheck,
   Sparkles,
   Wallet,
+  X,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -54,12 +58,7 @@ import {
   timeAgo,
   type LaunchRecord,
 } from "@/lib/feed";
-import {
-  formatEth,
-  ROBUX_NAME,
-  ROBUX_SYMBOL,
-  ROBUX_TICKER,
-} from "@/lib/robux";
+import { formatEth, ROBUX_NAME, ROBUX_TICKER } from "@/lib/robux";
 
 type FormState = {
   name: string;
@@ -73,6 +72,7 @@ type FormState = {
 };
 
 type ClaimMode = "escrow" | "curve" | "pool";
+type FeedFilter = "all" | "mine" | "buyback";
 
 const CHAIN_ID = 4663;
 
@@ -86,6 +86,14 @@ const initialForm: FormState = {
   creatorTax: "0",
   buybackEnabled: false,
 };
+
+const MENU_LINKS = [
+  { href: "#feed", label: "Explore feed", icon: LayoutGrid },
+  { href: "#launch", label: "Launch a coin", icon: Rocket },
+  { href: "#claim", label: "Claim fees", icon: Zap },
+  { href: "#loop", label: "How it works", icon: Sparkles },
+  { href: "#contracts", label: "Contracts", icon: ShieldCheck },
+];
 
 const shorten = (value: string, size = 5) =>
   `${value.slice(0, size + 2)}…${value.slice(-size)}`;
@@ -129,41 +137,46 @@ function AddressRow({ label, address }: { label: string; address: Address }) {
 }
 
 function FeedCard({ record }: { record: LaunchRecord }) {
-  const initials = record.symbol.slice(0, 3).toUpperCase();
+  const ticker = record.symbol.toUpperCase();
   return (
     <article className="feed-card">
-      <div className="feed-card-top">
-        <div className="feed-logo">
-          {record.logo ? (
-            <img src={record.logo} alt="" onError={(e) => (e.currentTarget.style.display = "none")} />
-          ) : (
-            <span>{initials}</span>
-          )}
-        </div>
+      <div className="feed-media">
+        {record.logo ? (
+          <img
+            src={record.logo}
+            alt=""
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              e.currentTarget.parentElement?.classList.add("no-image");
+            }}
+          />
+        ) : null}
+        <span className="feed-media-fallback">{ticker.slice(0, 4)}</span>
+        <span className="feed-badge"><Zap size={11} /> {ROBUX_TICKER} loop</span>
+        {record.buybackEnabled && <span className="feed-badge feed-badge-buyback">Buyback</span>}
+      </div>
+      <div className="feed-body">
         <div className="feed-heading">
-          <strong>{record.name}</strong>
-          <span>${record.symbol}</span>
+          <strong title={record.name}>{record.name}</strong>
+          <span>${ticker}</span>
         </div>
-        <span className="feed-time">{timeAgo(record.createdAt)}</span>
-      </div>
-      {record.description && <p className="feed-desc">{record.description}</p>}
-      <div className="feed-meta">
-        <span className="feed-pair">ETH pair</span>
-        <span className="feed-loop">
-          <Zap size={11} /> Loops to {ROBUX_TICKER}
-        </span>
-        {record.buybackEnabled && <span className="feed-buyback">Buyback</span>}
-      </div>
-      <div className="feed-links">
-        <a href={explorerTx(record.txHash)} target="_blank" rel="noreferrer">
-          Transaction <ArrowUpRight size={12} />
-        </a>
-        {record.website && (
-          <a href={record.website} target="_blank" rel="noreferrer">
-            <Globe size={12} /> Site
+        <div className="feed-subline">
+          <span className="feed-pair">ETH pair</span>
+          <span className="feed-time">{timeAgo(record.createdAt)}</span>
+        </div>
+        {record.description && <p className="feed-desc">{record.description}</p>}
+        <div className="feed-links">
+          <a href={explorerTx(record.txHash)} target="_blank" rel="noreferrer">
+            Transaction <ArrowUpRight size={12} />
           </a>
-        )}
-        <span className="feed-creator">by {shorten(record.creator, 4)}</span>
+          {record.website && (
+            <a href={record.website} target="_blank" rel="noreferrer">
+              <Globe size={12} /> Site
+            </a>
+          )}
+          <span className="feed-creator">by {shorten(record.creator, 4)}</span>
+        </div>
       </div>
     </article>
   );
@@ -175,6 +188,7 @@ export default function Home() {
   const { writeContractAsync } = useWriteContract();
   const { switchChainAsync } = useSwitchChain();
 
+  const [menuOpen, setMenuOpen] = useState(false);
   const [configs, setConfigs] = useState<LaunchConfig[]>([]);
   const [selectedConfig, setSelectedConfig] = useState<bigint>(BigInt(0));
   const [launchFee, setLaunchFee] = useState<bigint>(BigInt(0));
@@ -190,6 +204,7 @@ export default function Home() {
   const [loading, setLoading] = useState<"launch" | "claim" | "fees" | null>(null);
   const [lastHash, setLastHash] = useState<Hash | null>(null);
   const [feed, setFeed] = useState<LaunchRecord[]>([]);
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
 
   const adapterReady = !isAddressEqual(contracts.claimAdapter, zeroAddress);
   const isAdapterOwner = Boolean(
@@ -200,10 +215,24 @@ export default function Home() {
     [configs, selectedConfig],
   );
 
+  const filteredFeed = useMemo(() => {
+    if (feedFilter === "mine")
+      return feed.filter((r) => account && isAddressEqual(r.creator, account));
+    if (feedFilter === "buyback") return feed.filter((r) => r.buybackEnabled);
+    return feed;
+  }, [feed, feedFilter, account]);
+
   useEffect(() => {
     setFeed(getLaunchFeed());
     return subscribeFeed(setFeed);
   }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   const refreshProtocol = useCallback(async () => {
     try {
@@ -381,6 +410,7 @@ export default function Home() {
       });
       setForm(initialForm);
       toast.success("Launch transaction submitted — added to the live feed.");
+      document.getElementById("feed")?.scrollIntoView({ behavior: "smooth" });
     } catch (error) {
       toast.error(error instanceof Error ? error.message.slice(0, 160) : "Launch failed");
     } finally {
@@ -487,6 +517,12 @@ export default function Home() {
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [field]: value }));
 
+  const goTo = (href: string) => {
+    setMenuOpen(false);
+    const el = document.querySelector(href);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
   const walletLabel = account ? shorten(account) : "Connect wallet";
 
   return (
@@ -496,31 +532,66 @@ export default function Home() {
           <img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" />
           <span>ROBUX<span className="brand-accent">/LOOP</span></span>
         </a>
-        <nav className="nav-links" aria-label="Primary navigation">
-          <a href="#launch">Launch</a>
-          <a href="#feed">Feed</a>
-          <a href="#loop">Fee loop</a>
-          <a href="#contracts">Contracts</a>
-        </nav>
-        <Button className="wallet-button" onClick={() => open()}>
-          <Wallet size={16} />
-          {walletLabel}
-        </Button>
+        <div className="topbar-actions">
+          <Button className="launch-cta-btn" onClick={() => goTo("#launch")}>
+            <Rocket size={15} /> Launch a coin
+          </Button>
+          <Button className="wallet-button" onClick={() => open()}>
+            <Wallet size={16} />
+            <span className="wallet-label">{walletLabel}</span>
+          </Button>
+          <button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+            <MenuIcon size={19} />
+          </button>
+        </div>
       </header>
+
+      {/* Slide-out menu — Create, Claim, and everything else lives here */}
+      <div className={`drawer-overlay ${menuOpen ? "open" : ""}`} onClick={() => setMenuOpen(false)} aria-hidden={!menuOpen}>
+        <aside className="drawer" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Menu">
+          <div className="drawer-head">
+            <span>Menu</span>
+            <button className="drawer-close" onClick={() => setMenuOpen(false)} aria-label="Close menu">
+              <X size={18} />
+            </button>
+          </div>
+          <nav className="drawer-nav">
+            {MENU_LINKS.map((link) => (
+              <button key={link.href} onClick={() => goTo(link.href)}>
+                <link.icon size={17} />
+                {link.label}
+                <ArrowRight size={15} className="drawer-arrow" />
+              </button>
+            ))}
+            <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">
+              <FileText size={17} /> Docs <ArrowUpRight size={15} className="drawer-arrow" />
+            </a>
+          </nav>
+          <div className="drawer-foot">
+            <a className="drawer-social" href="https://x.com" target="_blank" rel="noreferrer">Follow updates on X</a>
+            <Button className="drawer-launch" onClick={() => goTo("#launch")}>
+              <Rocket size={16} /> Launch a coin
+            </Button>
+            <Button className="drawer-wallet" onClick={() => { setMenuOpen(false); open(); }}>
+              <Wallet size={16} /> {walletLabel}
+            </Button>
+          </div>
+        </aside>
+      </div>
 
       <main id="top">
         <section className="hero container">
           <div className="hero-copy">
             <div className="eyebrow"><span /> Built on Pons V2 · Robinhood Chain</div>
-            <h1>Launch with ETH.<br /><em>Loop the fees into Robux.</em></h1>
+            <h1>Launch with ETH.<br /><em>Loop fees into Robux.</em></h1>
             <p className="hero-lede">
-              Every bonding curve is paired with native ETH. Each launch routes its creator
-              fees through a dedicated adapter, sweeps them from the Pons escrow, and swaps
-              them into {ROBUX_NAME} ({ROBUX_TICKER}) straight to your treasury.
+              Pair your coin with native ETH on Pons V2. Creator fees route through a
+              dedicated adapter and get swapped into {ROBUX_NAME} ({ROBUX_TICKER}) straight
+              to your treasury — fully non-custodial.
             </p>
             <div className="hero-actions">
-              <a className="primary-cta" href="#launch">Create a launch <ArrowDownRight size={18} /></a>
-              <a className="text-link" href="#loop">See how it flows <ArrowRight size={16} /></a>
+              <a className="primary-cta" href="#launch" onClick={(e) => { e.preventDefault(); goTo("#launch"); }}>Launch a coin <ArrowDownRight size={18} /></a>
+              <a className="text-link" href="#feed" onClick={(e) => { e.preventDefault(); goTo("#feed"); }}>Explore the feed <ArrowRight size={16} /></a>
             </div>
             <div className="hero-notes">
               <span><LockKeyhole size={14} /> Non-custodial</span>
@@ -551,6 +622,51 @@ export default function Home() {
           <div><span>CREATOR RECIPIENT</span><strong>CLAIM ADAPTER</strong></div>
           <div><span>TARGET</span><strong>{ROBUX_TICKER}</strong></div>
           <div><span>LIQUIDITY</span><strong>LOCKED</strong></div>
+        </section>
+
+        {/* FEED — front and center */}
+        <section id="feed" className="section feed-section container">
+          <div className="feed-head">
+            <div>
+              <div className="eyebrow"><span /> <Radio size={13} /> Live feed</div>
+              <h2>Fresh launches.</h2>
+            </div>
+            <div className="feed-toolbar">
+              <div className="feed-filters" role="tablist" aria-label="Feed filter">
+                {([
+                  ["all", "All"],
+                  ["mine", "Mine"],
+                  ["buyback", "Buyback"],
+                ] as [FeedFilter, string][]).map(([key, label]) => (
+                  <button key={key} className={feedFilter === key ? "active" : ""} onClick={() => setFeedFilter(key)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <Button className="feed-launch-btn" onClick={() => goTo("#launch")}>
+                <Rocket size={15} /> Launch a coin
+              </Button>
+            </div>
+          </div>
+
+          {filteredFeed.length === 0 ? (
+            <div className="feed-empty">
+              <Rocket size={26} />
+              <strong>{feedFilter === "all" ? "No launches yet" : "Nothing here yet"}</strong>
+              <p>
+                {feedFilter === "mine"
+                  ? "Coins you launch from this device show up here."
+                  : "Be the first to ship a token. Every launch made through this interface appears here instantly."}
+              </p>
+              <button className="text-link" onClick={() => goTo("#launch")}>Launch a coin <ArrowRight size={16} /></button>
+            </div>
+          ) : (
+            <div className="feed-grid">
+              {filteredFeed.map((record) => (
+                <FeedCard key={record.id} record={record} />
+              ))}
+            </div>
+          )}
         </section>
 
         <section id="loop" className="section container">
@@ -629,7 +745,7 @@ export default function Home() {
             <p className="fineprint">Use one adapter per launch/treasury. Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
           </div>
 
-          <aside className="claim-panel">
+          <aside id="claim" className="claim-panel">
             <div className="claim-top">
               <div className="claim-icon"><Zap size={23} /></div>
               <div><span>AUTO-BUY ENGINE</span><h3>Claim fees → {ROBUX_NAME}</h3></div>
@@ -674,31 +790,6 @@ export default function Home() {
           </aside>
         </section>
 
-        <section id="feed" className="section feed-section container">
-          <div className="section-heading split-heading">
-            <div>
-              <div className="eyebrow"><span /> <Radio size={13} /> Live feed</div>
-              <h2>Fresh launches.</h2>
-            </div>
-            <p>Every token launched through this interface shows up here — paired with ETH, looping fees into {ROBUX_TICKER}. The feed is stored locally in your browser.</p>
-          </div>
-
-          {feed.length === 0 ? (
-            <div className="feed-empty">
-              <Rocket size={26} />
-              <strong>No launches yet</strong>
-              <p>Be the first to ship a token. Your launch appears here the moment the transaction is submitted.</p>
-              <a className="text-link" href="#launch">Create a launch <ArrowRight size={16} /></a>
-            </div>
-          ) : (
-            <div className="feed-grid">
-              {feed.map((record) => (
-                <FeedCard key={record.id} record={record} />
-              ))}
-            </div>
-          )}
-        </section>
-
         <section id="contracts" className="section contracts-section container">
           <div className="contracts-copy">
             <div className="eyebrow"><span /> Verify it yourself</div>
@@ -726,7 +817,7 @@ export default function Home() {
 
       <footer className="footer container">
         <div className="brand"><img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" /><span>ROBUX<span className="brand-accent">/LOOP</span></span></div>
-        <p>Independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. {ROBUX_SYMBOL} denotes the {ROBUX_TICKER} target token, not fiat.</p>
+        <p>Independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
         <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">Pons docs <ExternalLink size={13} /></a>
       </footer>
     </div>
