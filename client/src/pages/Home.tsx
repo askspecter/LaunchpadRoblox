@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowDownRight,
+  ArrowLeft,
   ArrowRight,
   ArrowUpRight,
   BadgeCheck,
@@ -14,7 +14,6 @@ import {
   Globe,
   LayoutGrid,
   LoaderCircle,
-  LockKeyhole,
   Menu as MenuIcon,
   Network,
   Radio,
@@ -73,6 +72,7 @@ type FormState = {
 
 type ClaimMode = "escrow" | "curve" | "pool";
 type FeedFilter = "all" | "mine" | "buyback";
+type View = "feed" | "launch" | "claim" | "how" | "contracts";
 
 const CHAIN_ID = 4663;
 
@@ -87,13 +87,18 @@ const initialForm: FormState = {
   buybackEnabled: false,
 };
 
-const MENU_LINKS = [
-  { href: "#feed", label: "Explore feed", icon: LayoutGrid },
-  { href: "#launch", label: "Launch a coin", icon: Rocket },
-  { href: "#claim", label: "Claim fees", icon: Zap },
-  { href: "#loop", label: "How it works", icon: Sparkles },
-  { href: "#contracts", label: "Contracts", icon: ShieldCheck },
+const MENU_LINKS: { view: View; label: string; icon: typeof LayoutGrid }[] = [
+  { view: "feed", label: "Explore feed", icon: LayoutGrid },
+  { view: "launch", label: "Launch a coin", icon: Rocket },
+  { view: "claim", label: "Claim fees", icon: Zap },
+  { view: "how", label: "How it works", icon: Sparkles },
+  { view: "contracts", label: "Contracts", icon: ShieldCheck },
 ];
+
+const viewFromHash = (): View => {
+  const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
+  return h === "launch" || h === "claim" || h === "how" || h === "contracts" ? h : "feed";
+};
 
 const shorten = (value: string, size = 5) =>
   `${value.slice(0, size + 2)}…${value.slice(-size)}`;
@@ -148,7 +153,6 @@ function FeedCard({ record }: { record: LaunchRecord }) {
             loading="lazy"
             onError={(e) => {
               e.currentTarget.style.display = "none";
-              e.currentTarget.parentElement?.classList.add("no-image");
             }}
           />
         ) : null}
@@ -188,6 +192,7 @@ export default function Home() {
   const { writeContractAsync } = useWriteContract();
   const { switchChainAsync } = useSwitchChain();
 
+  const [view, setView] = useState<View>(viewFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const [configs, setConfigs] = useState<LaunchConfig[]>([]);
   const [selectedConfig, setSelectedConfig] = useState<bigint>(BigInt(0));
@@ -228,11 +233,25 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const onHash = () => setView(viewFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  const navigate = useCallback((next: View) => {
+    setMenuOpen(false);
+    setView(next);
+    const target = next === "feed" ? "#/" : `#/${next}`;
+    if (window.location.hash !== target) window.location.hash = target;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   const refreshProtocol = useCallback(async () => {
     try {
@@ -270,7 +289,7 @@ export default function Home() {
           open.some((item) => item.id === current) ? current : open[0].id,
         );
     } catch {
-      toast.error("Could not read Pons data. The public RPC may be rate-limited.");
+      toast.error("Could not read Pons data. The public RPC may be rate limited.");
     }
   }, []);
 
@@ -344,7 +363,7 @@ export default function Home() {
     if (!adapterReady)
       return toast.error("Deploy ClaimToRBLXAdapter, then set VITE_CLAIM_ADAPTER_ADDRESS.");
     if (!adapterOwner)
-      return toast.error("Adapter owner could not be verified on-chain yet.");
+      return toast.error("Adapter owner could not be verified onchain yet.");
     if (adapterOwner && !isAdapterOwner)
       return toast.error("This wallet is not the adapter owner. Use the adapter dedicated to this launch.");
     if (!form.name.trim() || !form.symbol.trim() || !form.description.trim())
@@ -409,8 +428,8 @@ export default function Home() {
         creator: account,
       });
       setForm(initialForm);
-      toast.success("Launch transaction submitted — added to the live feed.");
-      document.getElementById("feed")?.scrollIntoView({ behavior: "smooth" });
+      toast.success("Launch transaction submitted. Added to the live feed.");
+      navigate("feed");
     } catch (error) {
       toast.error(error instanceof Error ? error.message.slice(0, 160) : "Launch failed");
     } finally {
@@ -433,7 +452,7 @@ export default function Home() {
         setPendingFees(baseFee + creatorTax);
       } else if (claimMode === "pool") {
         if (!/^0x[0-9a-fA-F]{64}$/.test(poolId))
-          throw new Error("Pool ID must be bytes32 (0x + 64 hex characters).");
+          throw new Error("Pool ID must be bytes32 (0x plus 64 hex characters).");
         const [baseFee, creatorTax] = await publicClient.multicall({
           allowFailure: false,
           contracts: [
@@ -497,7 +516,7 @@ export default function Home() {
                 args: [amountOutMinimum, deadline],
               });
       setLastHash(hash);
-      toast.success("Transaction submitted — waiting for confirmation…");
+      toast.success("Transaction submitted. Waiting for confirmation…");
       await publicClient.waitForTransactionReceipt({ hash });
       await refreshWalletState(account);
       setPendingFees(null);
@@ -517,23 +536,251 @@ export default function Home() {
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [field]: value }));
 
-  const goTo = (href: string) => {
-    setMenuOpen(false);
-    const el = document.querySelector(href);
-    if (el) el.scrollIntoView({ behavior: "smooth" });
-  };
-
   const walletLabel = account ? shorten(account) : "Connect wallet";
+
+  const feedPage = (
+    <section className="page feed-page container">
+      <div className="feed-head">
+        <div>
+          <div className="eyebrow"><span /> <Radio size={13} /> Live feed</div>
+          <h2>Fresh launches.</h2>
+          <p className="feed-intro">Coins launched through this interface, paired with ETH and looping fees into {ROBUX_TICKER}.</p>
+        </div>
+        <div className="feed-toolbar">
+          <div className="feed-filters" role="tablist" aria-label="Feed filter">
+            {([
+              ["all", "All"],
+              ["mine", "Mine"],
+              ["buyback", "Buyback"],
+            ] as [FeedFilter, string][]).map(([key, label]) => (
+              <button key={key} className={feedFilter === key ? "active" : ""} onClick={() => setFeedFilter(key)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button className="feed-launch-btn" onClick={() => navigate("launch")}>
+            <Rocket size={15} /> Launch a coin
+          </Button>
+        </div>
+      </div>
+
+      {filteredFeed.length === 0 ? (
+        <div className="feed-empty">
+          <Rocket size={26} />
+          <strong>{feedFilter === "all" ? "No launches yet" : "Nothing here yet"}</strong>
+          <p>
+            {feedFilter === "mine"
+              ? "Coins you launch from this device show up here."
+              : "Be the first to ship a token. Every launch made through this interface appears here instantly."}
+          </p>
+          <button className="text-link" onClick={() => navigate("launch")}>Launch a coin <ArrowRight size={16} /></button>
+        </div>
+      ) : (
+        <div className="feed-grid">
+          {filteredFeed.map((record) => (
+            <FeedCard key={record.id} record={record} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+
+  const launchPage = (
+    <section className="page container">
+      <div className="page-head">
+        <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
+        <div className="eyebrow"><span /> Launch console</div>
+        <h1 className="page-title">Launch a coin.</h1>
+        <p className="page-sub">Create a token on Pons V2 with a native ETH pair. Creator fees route to your dedicated adapter so they can be looped into {ROBUX_TICKER}.</p>
+      </div>
+
+      <div className="page-narrow">
+        <div className="launch-panel">
+          <div className="panel-head">
+            <div>
+              <div className="eyebrow"><span /> Token details</div>
+              <h2>Prepare your token.</h2>
+            </div>
+            <StatusPill ready={adapterReady} />
+          </div>
+
+          <div className="form-grid">
+            <label className="field"><span>Token name</span><input value={form.name} onChange={(event) => setField("name", event.target.value)} placeholder="Block Party" /></label>
+            <label className="field"><span>Ticker</span><input value={form.symbol} onChange={(event) => setField("symbol", event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10))} placeholder="BLOCK" /></label>
+            <label className="field field-wide"><span>Description</span><textarea value={form.description} onChange={(event) => setField("description", event.target.value)} placeholder="Tell people why this launch is worth following…" rows={4} /></label>
+            <label className="field"><span>Logo URL / IPFS</span><input value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="ipfs://…" /></label>
+            <label className="field"><span>Website</span><input value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="https://…" /></label>
+            <label className="field"><span>X / Twitter</span><input value={form.twitter} onChange={(event) => setField("twitter", event.target.value)} placeholder="https://x.com/…" /></label>
+            <label className="field">
+              <span>Creator tax</span>
+              <select value={form.creatorTax} onChange={(event) => setField("creatorTax", event.target.value)}>
+                <option value="0">0.00%</option><option value="50">0.50%</option><option value="100">1.00%</option><option value="200">2.00%</option>
+              </select>
+            </label>
+            <label className="field field-wide"><span>Pons configuration</span>
+              <select value={selectedConfig.toString()} onChange={(event) => setSelectedConfig(BigInt(event.target.value))} disabled={configs.length === 0}>
+                {configs.length === 0 && <option value="0">Not read from chain yet</option>}
+                {configs.map((config) => <option key={config.id.toString()} value={config.id.toString()}>Config #{config.id.toString()} · threshold {formatEth(config.graduationThreshold)} ETH</option>)}
+              </select>
+            </label>
+            <label className="toggle-row field-wide">
+              <button type="button" role="switch" aria-checked={form.buybackEnabled} className={`toggle ${form.buybackEnabled ? "toggle-on" : ""}`} onClick={() => setField("buybackEnabled", !form.buybackEnabled)}><span /></button>
+              <span><strong>Enable native Pons buyback</strong><small>Optional and separate from the external {ROBUX_TICKER} auto buy.</small></span>
+            </label>
+          </div>
+
+          <div className="launch-summary">
+            <div><span>Pair</span><strong>Native ETH</strong></div>
+            <div><span>Recipient</span><strong>{adapterReady ? shorten(contracts.claimAdapter) : "No adapter yet"}</strong></div>
+            <div><span>Launch fee</span><strong>{formatEth(launchFee)} ETH</strong></div>
+            <div><span>Eligibility</span><strong className={canLaunch === false ? "text-amber-300" : "text-lime-300"}>{canLaunch === null ? "Connect wallet" : canLaunch ? "Eligible" : "Whitelist required"}</strong></div>
+          </div>
+
+          <Button className="launch-button" onClick={launch} disabled={loading === "launch" || configs.length === 0 || (adapterReady && !adapterOwner) || Boolean(account && adapterOwner && !isAdapterOwner)}>
+            {loading === "launch" ? <LoaderCircle className="animate-spin" size={18} /> : <Rocket size={18} />}
+            {account ? "Launch with ETH pair" : "Connect to launch"}
+            <ArrowRight size={18} />
+          </Button>
+          <p className="fineprint">Use one adapter per launch and treasury. Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
+        </div>
+
+        <div className="page-crosslink">
+          <span>Already launched and fees are piling up?</span>
+          <button className="text-link" onClick={() => navigate("claim")}>Go to Claim fees <ArrowRight size={15} /></button>
+        </div>
+      </div>
+    </section>
+  );
+
+  const claimPage = (
+    <section className="page container">
+      <div className="page-head">
+        <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
+        <div className="eyebrow"><span /> Auto buy engine</div>
+        <h1 className="page-title">Claim fees into {ROBUX_NAME}.</h1>
+        <p className="page-sub">Sweep and claim the ETH creator fees your adapter has accrued, then swap them into {ROBUX_TICKER} in one atomic, slippage protected transaction.</p>
+      </div>
+
+      <div className="page-claim">
+        <aside className="claim-panel">
+          <div className="claim-top">
+            <div className="claim-icon"><Zap size={23} /></div>
+            <div><span>AUTO BUY ENGINE</span><h3>Claim fees into {ROBUX_NAME}</h3></div>
+          </div>
+          <div className="balance-card">
+            <span>ETH ready to claim</span>
+            <strong>{formatEth(claimable)}</strong>
+            <small>in the Pons Fee Escrow</small>
+          </div>
+          <div className="claim-modes" role="tablist" aria-label="Fee source">
+            {(["escrow", "curve", "pool"] as ClaimMode[]).map((mode) => (
+              <button key={mode} type="button" className={claimMode === mode ? "active" : ""} onClick={() => { setClaimMode(mode); setPendingFees(null); }}>
+                {mode === "escrow" ? "Escrow" : mode === "curve" ? "Curve" : "Pool V4"}
+              </button>
+            ))}
+          </div>
+          {claimMode === "curve" && (
+            <label className="field dark-field"><span>Bonding curve address</span><input value={curveAddress} onChange={(event) => setCurveAddress(event.target.value)} placeholder="0x…" /></label>
+          )}
+          {claimMode === "pool" && (
+            <label className="field dark-field"><span>Pons / Uniswap V4 pool ID</span><input value={poolId} onChange={(event) => setPoolId(event.target.value)} placeholder="0x plus 64 hex characters" /></label>
+          )}
+          {claimMode !== "escrow" && (
+            <button className="pending-button" type="button" onClick={readPendingFees} disabled={loading === "fees"}>
+              {loading === "fees" ? <LoaderCircle className="animate-spin" size={14} /> : <Network size={14} />}
+              {pendingFees === null ? "Read unswept fees" : `${formatEth(pendingFees)} ETH pending`}
+            </button>
+          )}
+          <label className="field dark-field"><span>Minimum {ROBUX_TICKER} received</span><input inputMode="decimal" value={minRblxOut} onChange={(event) => setMinRblxOut(event.target.value)} placeholder="Required for slippage protection" /></label>
+          <Button className="claim-button" onClick={claimAndBuy} disabled={loading === "claim" || !adapterReady}>
+            {loading === "claim" ? <LoaderCircle className="animate-spin" size={18} /> : <Zap size={18} />}
+            {claimMode === "escrow" ? `Claim & buy ${ROBUX_TICKER}` : `Sweep, claim & buy`}
+          </Button>
+          <div className="claim-checks">
+            <span><Check size={14} /> Owner gated execution</span>
+            <span><Check size={14} /> Single atomic transaction</span>
+            <span><Check size={14} /> 20 minute deadline</span>
+            <span><Check size={14} /> Onchain minimum output</span>
+          </div>
+          {claimMode !== "escrow" && <p className="operator-note">If the sweep needs an internal Pons swap or buyback, the creator transaction reverts. Wait for the Pons operator, then use Escrow mode.</p>}
+          {lastHash && <a className="tx-link" href={explorerTx(lastHash)} target="_blank" rel="noreferrer">View latest transaction <ExternalLink size={14} /></a>}
+        </aside>
+
+        <div className="page-crosslink">
+          <span>Need to create a token first?</span>
+          <button className="text-link" onClick={() => navigate("launch")}>Go to Launch a coin <ArrowRight size={15} /></button>
+        </div>
+      </div>
+    </section>
+  );
+
+  const howPage = (
+    <section className="page container">
+      <div className="page-head">
+        <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
+        <div className="eyebrow"><span /> How it works</div>
+        <h1 className="page-title">One loop. Same ETH pair.</h1>
+        <p className="page-sub">Pons still prices the curve, graduation, and fees in ETH. The only thing that changes is the creator fee recipient: an adapter smart contract instead of a plain wallet.</p>
+      </div>
+
+      <div className="flow-grid">
+        {[
+          { n: "01", icon: Rocket, title: "Launch on Pons", text: "The token is created with a native ETH pair and creatorFeeRecipient pointed at this launch's dedicated adapter." },
+          { n: "02", icon: Fuel, title: "Fees accrue", text: "Trading fees and creator tax are swept into the native ETH ledger the adapter holds in the Pons escrow." },
+          { n: "03", icon: Sparkles, title: "Claim and buy", text: `The adapter owner triggers the claim. The adapter swaps ETH into ${ROBUX_TICKER} with a minimum output and deadline.` },
+          { n: "04", icon: Box, title: "Into the treasury", text: `The resulting ${ROBUX_TICKER} is sent straight to the treasury. The adapter holds no balance once the transaction settles.` },
+        ].map((item, index) => (
+          <article className="flow-card" key={item.n} style={{ animationDelay: `${index * 60}ms` }}>
+            <div className="flow-meta"><span>{item.n}</span><item.icon size={19} /></div>
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+            {index < 3 && <ArrowRight className="flow-arrow" size={18} />}
+          </article>
+        ))}
+      </div>
+
+      <div className="safety-block">
+        <div className="safety-kicker"><BadgeCheck size={19} /> Built for transparent execution</div>
+        <h2>The route is automated. The decision is not.</h2>
+        <p>Every launch, claim, and swap still requires a wallet signature. No bots with private keys, no custody, and no hidden minimum price.</p>
+        <Button className="feed-launch-btn" onClick={() => navigate("launch")}><Rocket size={15} /> Launch a coin</Button>
+      </div>
+    </section>
+  );
+
+  const contractsPage = (
+    <section className="page container">
+      <div className="page-head">
+        <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
+        <div className="eyebrow"><span /> Verify it yourself</div>
+        <h1 className="page-title">Addresses, not promises.</h1>
+        <p className="page-sub">Every value path is verifiable through the explorer. The target token is configurable so it is never confused with the official Roblox stock token.</p>
+      </div>
+
+      <div className="contracts-grid">
+        <div className="contract-list">
+          <AddressRow label="Pons V2 Factory" address={contracts.ponsFactory} />
+          <AddressRow label="Pons Fee Escrow" address={contracts.ponsFeeEscrow} />
+          <AddressRow label="Pons Meme Hook" address={contracts.ponsMemeHook} />
+          <AddressRow label="Claim Adapter" address={contracts.claimAdapter} />
+          <AddressRow label="Target Robux (default)" address={contracts.targetToken} />
+          <AddressRow label="Official Roblox token" address={contracts.officialRobloxToken} />
+          <AddressRow label="Uniswap SwapRouter02" address={contracts.uniswapRouter} />
+        </div>
+        <div className="warning-box"><CircleAlert size={19} /><div><strong>Two different tokens share the RBLX symbol.</strong><p>The current default target is the community <b>Robux</b> token at <code>0xac3D…cb07</code>. The official <b>Roblox · Robinhood Token</b> is at <code>0xF0C4…1bE8</code>. Confirm the target before deploying an adapter.</p></div></div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="site-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Robux Loop home">
+        <button className="brand" onClick={() => navigate("feed")} aria-label="Robux Loop home">
           <img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" />
           <span>ROBUX<span className="brand-accent">/LOOP</span></span>
-        </a>
+        </button>
         <div className="topbar-actions">
-          <Button className="launch-cta-btn" onClick={() => goTo("#launch")}>
+          <Button className="launch-cta-btn" onClick={() => navigate("launch")}>
             <Rocket size={15} /> Launch a coin
           </Button>
           <Button className="wallet-button" onClick={() => open()}>
@@ -546,7 +793,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Slide-out menu — Create, Claim, and everything else lives here */}
       <div className={`drawer-overlay ${menuOpen ? "open" : ""}`} onClick={() => setMenuOpen(false)} aria-hidden={!menuOpen}>
         <aside className="drawer" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Menu">
           <div className="drawer-head">
@@ -557,7 +803,7 @@ export default function Home() {
           </div>
           <nav className="drawer-nav">
             {MENU_LINKS.map((link) => (
-              <button key={link.href} onClick={() => goTo(link.href)}>
+              <button key={link.view} className={view === link.view ? "active" : ""} onClick={() => navigate(link.view)}>
                 <link.icon size={17} />
                 {link.label}
                 <ArrowRight size={15} className="drawer-arrow" />
@@ -569,7 +815,7 @@ export default function Home() {
           </nav>
           <div className="drawer-foot">
             <a className="drawer-social" href="https://x.com" target="_blank" rel="noreferrer">Follow updates on X</a>
-            <Button className="drawer-launch" onClick={() => goTo("#launch")}>
+            <Button className="drawer-launch" onClick={() => navigate("launch")}>
               <Rocket size={16} /> Launch a coin
             </Button>
             <Button className="drawer-wallet" onClick={() => { setMenuOpen(false); open(); }}>
@@ -580,243 +826,15 @@ export default function Home() {
       </div>
 
       <main id="top">
-        <section className="hero container">
-          <div className="hero-copy">
-            <div className="eyebrow"><span /> Built on Pons V2 · Robinhood Chain</div>
-            <h1>Launch with ETH.<br /><em>Loop fees into Robux.</em></h1>
-            <p className="hero-lede">
-              Pair your coin with native ETH on Pons V2. Creator fees route through a
-              dedicated adapter and get swapped into {ROBUX_NAME} ({ROBUX_TICKER}) straight
-              to your treasury — fully non-custodial.
-            </p>
-            <div className="hero-actions">
-              <a className="primary-cta" href="#launch" onClick={(e) => { e.preventDefault(); goTo("#launch"); }}>Launch a coin <ArrowDownRight size={18} /></a>
-              <a className="text-link" href="#feed" onClick={(e) => { e.preventDefault(); goTo("#feed"); }}>Explore the feed <ArrowRight size={16} /></a>
-            </div>
-            <div className="hero-notes">
-              <span><LockKeyhole size={14} /> Non-custodial</span>
-              <span><ShieldCheck size={14} /> Slippage-protected</span>
-              <span><Network size={14} /> Chain ID 4663</span>
-            </div>
-          </div>
-
-          <div className="hero-visual" aria-label="ETH to Robux flow visual">
-            <div className="hero-glow" />
-            <img className="hero-asset" src="/images/robux-loop-hero.webp" alt="3D sculpture depicting ETH flowing into a cube-shaped token" />
-            <div className="visual-card visual-eth"><span>01</span><strong>ETH</strong><small>pair asset</small></div>
-            <div className="visual-card visual-pons"><span>02</span><strong>PONS V2</strong><small>bonding curve</small></div>
-            <div className="visual-card visual-rblx"><span>03</span><strong>{ROBUX_TICKER}</strong><small>treasury loop</small></div>
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="cube-cluster">
-              <span className="cube cube-a" /><span className="cube cube-b" /><span className="cube cube-c" />
-              <span className="cube cube-d" /><span className="cube cube-e" />
-            </div>
-            <div className="visual-caption"><Zap size={15} /> CLAIM → SWAP → SEND</div>
-          </div>
-        </section>
-
-        <section className="ticker-strip" aria-label="Protocol summary">
-          <div><span>QUOTE ASSET</span><strong>ETH</strong></div>
-          <div><span>GRADUATION</span><strong>UNISWAP V4</strong></div>
-          <div><span>CREATOR RECIPIENT</span><strong>CLAIM ADAPTER</strong></div>
-          <div><span>TARGET</span><strong>{ROBUX_TICKER}</strong></div>
-          <div><span>LIQUIDITY</span><strong>LOCKED</strong></div>
-        </section>
-
-        {/* FEED — front and center */}
-        <section id="feed" className="section feed-section container">
-          <div className="feed-head">
-            <div>
-              <div className="eyebrow"><span /> <Radio size={13} /> Live feed</div>
-              <h2>Fresh launches.</h2>
-            </div>
-            <div className="feed-toolbar">
-              <div className="feed-filters" role="tablist" aria-label="Feed filter">
-                {([
-                  ["all", "All"],
-                  ["mine", "Mine"],
-                  ["buyback", "Buyback"],
-                ] as [FeedFilter, string][]).map(([key, label]) => (
-                  <button key={key} className={feedFilter === key ? "active" : ""} onClick={() => setFeedFilter(key)}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <Button className="feed-launch-btn" onClick={() => goTo("#launch")}>
-                <Rocket size={15} /> Launch a coin
-              </Button>
-            </div>
-          </div>
-
-          {filteredFeed.length === 0 ? (
-            <div className="feed-empty">
-              <Rocket size={26} />
-              <strong>{feedFilter === "all" ? "No launches yet" : "Nothing here yet"}</strong>
-              <p>
-                {feedFilter === "mine"
-                  ? "Coins you launch from this device show up here."
-                  : "Be the first to ship a token. Every launch made through this interface appears here instantly."}
-              </p>
-              <button className="text-link" onClick={() => goTo("#launch")}>Launch a coin <ArrowRight size={16} /></button>
-            </div>
-          ) : (
-            <div className="feed-grid">
-              {filteredFeed.map((record) => (
-                <FeedCard key={record.id} record={record} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section id="loop" className="section container">
-          <div className="section-heading split-heading">
-            <div>
-              <div className="eyebrow"><span /> How it works</div>
-              <h2>One loop.<br />Same ETH pair.</h2>
-            </div>
-            <p>Pons still prices the curve, graduation, and fees in ETH. The only thing that changes is the creator-fee recipient: an adapter smart contract instead of a plain wallet.</p>
-          </div>
-
-          <div className="flow-grid">
-            {[
-              { n: "01", icon: Rocket, title: "Launch on Pons", text: "The token is created with a native ETH pair and creatorFeeRecipient pointed at this launch's dedicated adapter." },
-              { n: "02", icon: Fuel, title: "Fees accrue", text: "Trading fees and creator tax are swept into the native ETH ledger the adapter holds in the Pons escrow." },
-              { n: "03", icon: Sparkles, title: "Claim + buy", text: `The adapter owner triggers the claim. The adapter swaps ETH into ${ROBUX_TICKER} with a minimum output and deadline.` },
-              { n: "04", icon: Box, title: "Into the treasury", text: `The resulting ${ROBUX_TICKER} is sent straight to the treasury. The adapter holds no balance once the transaction settles.` },
-            ].map((item, index) => (
-              <article className="flow-card" key={item.n} style={{ animationDelay: `${index * 60}ms` }}>
-                <div className="flow-meta"><span>{item.n}</span><item.icon size={19} /></div>
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-                {index < 3 && <ArrowRight className="flow-arrow" size={18} />}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section id="launch" className="section launch-section container">
-          <div className="launch-panel">
-            <div className="panel-head">
-              <div>
-                <div className="eyebrow"><span /> Launch console</div>
-                <h2>Prepare your token.</h2>
-              </div>
-              <StatusPill ready={adapterReady} />
-            </div>
-
-            <div className="form-grid">
-              <label className="field"><span>Token name</span><input value={form.name} onChange={(event) => setField("name", event.target.value)} placeholder="Block Party" /></label>
-              <label className="field"><span>Ticker</span><input value={form.symbol} onChange={(event) => setField("symbol", event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10))} placeholder="BLOCK" /></label>
-              <label className="field field-wide"><span>Description</span><textarea value={form.description} onChange={(event) => setField("description", event.target.value)} placeholder="Tell people why this launch is worth following…" rows={4} /></label>
-              <label className="field"><span>Logo URL / IPFS</span><input value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="ipfs://…" /></label>
-              <label className="field"><span>Website</span><input value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="https://…" /></label>
-              <label className="field"><span>X / Twitter</span><input value={form.twitter} onChange={(event) => setField("twitter", event.target.value)} placeholder="https://x.com/…" /></label>
-              <label className="field">
-                <span>Creator tax</span>
-                <select value={form.creatorTax} onChange={(event) => setField("creatorTax", event.target.value)}>
-                  <option value="0">0.00%</option><option value="50">0.50%</option><option value="100">1.00%</option><option value="200">2.00%</option>
-                </select>
-              </label>
-              <label className="field field-wide"><span>Pons configuration</span>
-                <select value={selectedConfig.toString()} onChange={(event) => setSelectedConfig(BigInt(event.target.value))} disabled={configs.length === 0}>
-                  {configs.length === 0 && <option value="0">Not read from chain yet</option>}
-                  {configs.map((config) => <option key={config.id.toString()} value={config.id.toString()}>Config #{config.id.toString()} · threshold {formatEth(config.graduationThreshold)} ETH</option>)}
-                </select>
-              </label>
-              <label className="toggle-row field-wide">
-                <button type="button" role="switch" aria-checked={form.buybackEnabled} className={`toggle ${form.buybackEnabled ? "toggle-on" : ""}`} onClick={() => setField("buybackEnabled", !form.buybackEnabled)}><span /></button>
-                <span><strong>Enable native Pons buyback</strong><small>Optional and separate from the external {ROBUX_TICKER} auto-buy.</small></span>
-              </label>
-            </div>
-
-            <div className="launch-summary">
-              <div><span>Pair</span><strong>Native ETH</strong></div>
-              <div><span>Recipient</span><strong>{adapterReady ? shorten(contracts.claimAdapter) : "No adapter yet"}</strong></div>
-              <div><span>Launch fee</span><strong>{formatEth(launchFee)} ETH</strong></div>
-              <div><span>Eligibility</span><strong className={canLaunch === false ? "text-amber-300" : "text-lime-300"}>{canLaunch === null ? "Connect wallet" : canLaunch ? "Eligible" : "Whitelist required"}</strong></div>
-            </div>
-
-            <Button className="launch-button" onClick={launch} disabled={loading === "launch" || configs.length === 0 || (adapterReady && !adapterOwner) || Boolean(account && adapterOwner && !isAdapterOwner)}>
-              {loading === "launch" ? <LoaderCircle className="animate-spin" size={18} /> : <Rocket size={18} />}
-              {account ? "Launch with ETH pair" : "Connect to launch"}
-              <ArrowRight size={18} />
-            </Button>
-            <p className="fineprint">Use one adapter per launch/treasury. Your wallet signs directly to Pons V2; this app never asks for a private key.</p>
-          </div>
-
-          <aside id="claim" className="claim-panel">
-            <div className="claim-top">
-              <div className="claim-icon"><Zap size={23} /></div>
-              <div><span>AUTO-BUY ENGINE</span><h3>Claim fees → {ROBUX_NAME}</h3></div>
-            </div>
-            <div className="balance-card">
-              <span>ETH ready to claim</span>
-              <strong>{formatEth(claimable)}</strong>
-              <small>in the Pons Fee Escrow</small>
-            </div>
-            <div className="claim-modes" role="tablist" aria-label="Fee source">
-              {(["escrow", "curve", "pool"] as ClaimMode[]).map((mode) => (
-                <button key={mode} type="button" className={claimMode === mode ? "active" : ""} onClick={() => { setClaimMode(mode); setPendingFees(null); }}>
-                  {mode === "escrow" ? "Escrow" : mode === "curve" ? "Curve" : "Pool V4"}
-                </button>
-              ))}
-            </div>
-            {claimMode === "curve" && (
-              <label className="field dark-field"><span>Bonding curve address</span><input value={curveAddress} onChange={(event) => setCurveAddress(event.target.value)} placeholder="0x…" /></label>
-            )}
-            {claimMode === "pool" && (
-              <label className="field dark-field"><span>Pons / Uniswap V4 pool ID</span><input value={poolId} onChange={(event) => setPoolId(event.target.value)} placeholder="0x + 64 hex characters" /></label>
-            )}
-            {claimMode !== "escrow" && (
-              <button className="pending-button" type="button" onClick={readPendingFees} disabled={loading === "fees"}>
-                {loading === "fees" ? <LoaderCircle className="animate-spin" size={14} /> : <Network size={14} />}
-                {pendingFees === null ? "Read un-swept fees" : `${formatEth(pendingFees)} ETH pending`}
-              </button>
-            )}
-            <label className="field dark-field"><span>Minimum {ROBUX_TICKER} received</span><input inputMode="decimal" value={minRblxOut} onChange={(event) => setMinRblxOut(event.target.value)} placeholder="Required for slippage protection" /></label>
-            <Button className="claim-button" onClick={claimAndBuy} disabled={loading === "claim" || !adapterReady}>
-              {loading === "claim" ? <LoaderCircle className="animate-spin" size={18} /> : <Zap size={18} />}
-              {claimMode === "escrow" ? `Claim & buy ${ROBUX_TICKER}` : `Sweep, claim & buy`}
-            </Button>
-            <div className="claim-checks">
-              <span><Check size={14} /> Owner-gated execution</span>
-              <span><Check size={14} /> Single atomic transaction</span>
-              <span><Check size={14} /> 20-minute deadline</span>
-              <span><Check size={14} /> On-chain minimum output</span>
-            </div>
-            {claimMode !== "escrow" && <p className="operator-note">If the sweep needs an internal Pons swap or buyback, the creator transaction reverts. Wait for the Pons operator, then use Escrow mode.</p>}
-            {lastHash && <a className="tx-link" href={explorerTx(lastHash)} target="_blank" rel="noreferrer">View latest transaction <ExternalLink size={14} /></a>}
-          </aside>
-        </section>
-
-        <section id="contracts" className="section contracts-section container">
-          <div className="contracts-copy">
-            <div className="eyebrow"><span /> Verify it yourself</div>
-            <h2>Addresses, not promises.</h2>
-            <p>Every value path is verifiable through the explorer. The target token is configurable so it is never confused with the official Roblox stock token.</p>
-            <div className="warning-box"><CircleAlert size={19} /><div><strong>Two different tokens share the RBLX symbol.</strong><p>The current default target is the community <b>Robux</b> token at <code>0xac3D…cb07</code>. The official <b>Roblox · Robinhood Token</b> is at <code>0xF0C4…1bE8</code>. Confirm the target before deploying an adapter.</p></div></div>
-          </div>
-          <div className="contract-list">
-            <AddressRow label="Pons V2 Factory" address={contracts.ponsFactory} />
-            <AddressRow label="Pons Fee Escrow" address={contracts.ponsFeeEscrow} />
-            <AddressRow label="Pons Meme Hook" address={contracts.ponsMemeHook} />
-            <AddressRow label="Claim Adapter" address={contracts.claimAdapter} />
-            <AddressRow label="Target Robux (default)" address={contracts.targetToken} />
-            <AddressRow label="Official Roblox token" address={contracts.officialRobloxToken} />
-            <AddressRow label="Uniswap SwapRouter02" address={contracts.uniswapRouter} />
-          </div>
-        </section>
-
-        <section className="section safety-section container">
-          <div className="safety-kicker"><BadgeCheck size={19} /> Built for transparent execution</div>
-          <h2>The route is automated.<br /><span>The decision is not.</span></h2>
-          <p>Every launch, claim, and swap still requires a wallet signature. No bots with private keys, no custody, and no hidden minimum price.</p>
-        </section>
+        {view === "feed" && feedPage}
+        {view === "launch" && launchPage}
+        {view === "claim" && claimPage}
+        {view === "how" && howPage}
+        {view === "contracts" && contractsPage}
       </main>
 
       <footer className="footer container">
-        <div className="brand"><img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" /><span>ROBUX<span className="brand-accent">/LOOP</span></span></div>
+        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/robux-loop-icon.webp" alt="" /><span>ROBUX<span className="brand-accent">/LOOP</span></span></button>
         <p>Independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
         <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">Pons docs <ExternalLink size={13} /></a>
       </footer>
