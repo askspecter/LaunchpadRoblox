@@ -97,9 +97,11 @@ ol.toaster { max-width: 100vw; box-sizing: border-box; }
 
 .site-shell { min-height: 100vh; overflow-x: clip; }
 .topbar {
-  width: min(100% - 32px, 1240px);
+  width: 100%;
   height: 78px;
-  margin: 0 auto;
+  margin: 0;
+  padding-inline: max(16px, calc((100% - 1240px) / 2));
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -107,7 +109,7 @@ ol.toaster { max-width: 100vw; box-sizing: border-box; }
   position: sticky;
   top: 0;
   z-index: 40;
-  background: rgba(10, 6, 17, .72);
+  background: rgba(10, 6, 17, .82);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
 }
@@ -317,7 +319,7 @@ ol.toaster { max-width: 100vw; box-sizing: border-box; }
 }
 
 @media (max-width: 960px) {
-  .topbar { grid-template-columns: 1fr auto; }.nav-links { display: none; }
+  .nav-links { display: none; }
   .hero { grid-template-columns: 1fr; padding-top: 76px; }.hero-visual { min-height: 460px; max-width: 650px; width: 100%; margin-inline: auto; }
   .ticker-strip { grid-template-columns: repeat(2,1fr); }.ticker-strip div:nth-child(2n) { border-right: 0; }
   .split-heading, .contracts-section { grid-template-columns: 1fr; gap: 34px; }
@@ -337,7 +339,7 @@ ol.toaster { max-width: 100vw; box-sizing: border-box; }
 }
 
 @media (max-width: 640px) {
-  .container, .topbar { width: min(100% - 24px, 1240px); }.topbar { height: 66px; }.brand { font-size: 13px; }.brand-icon { width: 28px; height: 28px; }
+  .container { width: min(100% - 24px, 1240px); }.topbar { height: 64px; padding-inline: 16px; }.brand { font-size: 13px; }.brand-icon { width: 28px; height: 28px; }
   .hero { min-height: auto; padding-block: 72px; }.hero h1 { font-size: 50px; }.hero-lede { font-size: 14px; }.hero-actions { align-items: stretch; flex-direction: column; }.primary-cta { justify-content: space-between; }.hero-notes { gap: 12px; }
   .hero-visual { min-height: 390px; }.visual-card { width: 122px; padding: 13px; }.visual-card strong { margin-top: 17px; font-size: 15px; }.visual-pons { right: 0; }.orbit { left: 17%; }.orbit-two { left: 4%; }.visual-caption { right: 12px; }
   .ticker-strip { grid-template-columns: 1fr 1fr; }.ticker-strip div { padding: 17px 14px; }.ticker-strip div:last-child { grid-column: 1/-1; }
