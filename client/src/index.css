@@ -215,6 +215,7 @@ ol.toaster { max-width: 100vw; box-sizing: border-box; }
 .field-wide { grid-column: 1 / -1; }
 .field-logo { display: flex; flex-direction: column; gap: 8px; }
 .field-logo > span { color: #666d62; font: 650 9px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; }
+.field-hint { color: #8a8574; font: 500 10px var(--font-sans); line-height: 1.45; }
 .logo-dropzone { width: 100%; min-height: 108px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 1px dashed rgba(10,12,9,.28); border-radius: 8px; background: rgba(255,255,255,.5); color: #3f3b30; font: 700 12px var(--font-sans); transition: border-color 160ms var(--ease-out), background 160ms var(--ease-out), color 160ms var(--ease-out); }
 .logo-dropzone:hover { border-color: #ff7a1f; background: rgba(255,122,31,.06); color: #b5470a; }
 .logo-dropzone svg { color: #ff7a1f; margin-bottom: 4px; }

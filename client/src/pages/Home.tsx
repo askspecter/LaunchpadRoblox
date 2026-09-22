@@ -95,11 +95,18 @@ type FormState = {
   symbol: string;
   description: string;
   logo: string;
+  logoUrl: string;
   website: string;
   twitter: string;
   creatorTax: string;
   buybackEnabled: boolean;
 };
+
+// Pons rejects an over-long on-chain logo string (data-URL uploads are far too
+// big). Only a short http(s) URL may be sent on chain.
+const MAX_ONCHAIN_LOGO = 500;
+const onChainLogo = (url: string): string =>
+  /^https?:\/\//i.test(url) && url.length <= MAX_ONCHAIN_LOGO ? url.trim() : "";
 
 type ClaimMode = "escrow" | "curve" | "pool";
 type FeedFilter = "all" | "mine" | "buyback";
@@ -117,6 +124,7 @@ const initialForm: FormState = {
   symbol: "",
   description: "",
   logo: "",
+  logoUrl: "",
   website: "",
   twitter: "",
   creatorTax: "0",
@@ -496,6 +504,12 @@ export default function Home() {
     }
     if (!form.name.trim() || !form.symbol.trim() || !form.description.trim())
       return toast.error("Name, ticker, and description are required.");
+    if (form.name.trim().length > 64)
+      return toast.error("Token name must be 64 characters or fewer.");
+    if (form.symbol.trim().length > 16)
+      return toast.error("Ticker must be 16 characters or fewer.");
+    if (form.logoUrl.trim() && !onChainLogo(form.logoUrl))
+      return toast.error("Logo URL must start with http(s) and be under 500 characters.");
     if (canLaunch === false)
       return toast.error("This address is not yet allowed to launch on Pons V2.");
 
@@ -549,7 +563,9 @@ export default function Home() {
           {
             name: form.name.trim(),
             symbol: form.symbol.trim().toUpperCase(),
-            logo: form.logo.trim(),
+            // Never send the uploaded data-URL on chain — Pons rejects an
+            // over-long logo string. Only a short http(s) URL goes on chain.
+            logo: onChainLogo(form.logoUrl),
             description: form.description.trim(),
             socials: {
               twitter: form.twitter.trim(),
@@ -599,7 +615,7 @@ export default function Home() {
         name: form.name.trim(),
         symbol: form.symbol.trim().toUpperCase(),
         description: form.description.trim(),
-        logo: form.logo.trim(),
+        logo: form.logo.trim() || onChainLogo(form.logoUrl),
         website: form.website.trim(),
         twitter: form.twitter.trim(),
         creatorTaxBps,
@@ -1016,7 +1032,9 @@ export default function Home() {
                 </button>
               )}
               <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={(event) => { onLogoFile(event.target.files?.[0]); event.target.value = ""; }} />
+              <small className="field-hint">Uploaded image shows on the Bloxpad feed. For a logo on Pons and the explorer, add a short image URL below.</small>
             </div>
+            <label className="field field-wide"><span>Logo URL (on-chain, optional)</span><input value={form.logoUrl} onChange={(event) => setField("logoUrl", event.target.value)} placeholder="https://…/logo.png" /></label>
             <label className="field"><span>Website</span><input value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="https://…" /></label>
             <label className="field"><span>X / Twitter</span><input value={form.twitter} onChange={(event) => setField("twitter", event.target.value)} placeholder="https://x.com/…" /></label>
             <label className="field">
