@@ -77,6 +77,7 @@ import {
   timeAgo,
   type LaunchRecord,
 } from "@/lib/feed";
+import { fetchSpotPriceRBLX } from "@/lib/official";
 import { formatEth, ROBUX_SYMBOL, ROBUX_NAME, ROBUX_TICKER } from "@/lib/robux";
 import { TokenDashboard } from "@/components/TokenDashboard";
 import {
@@ -196,12 +197,45 @@ function AddressRow({ label, address }: { label: string; address: Address }) {
   );
 }
 
+// Formats a token's RBLX spot price for the compact feed card. Prices are tiny
+// on a fresh curve, so keep significant digits for small numbers.
+function formatPrice(p: number): string {
+  if (p >= 1) return p.toFixed(4);
+  if (p > 0) return p.toPrecision(3);
+  return "0";
+}
+
+// Live RBLX price for a token, read from its Pons curve and refreshed while the
+// feed is on screen. Degrades to a plain "Live" pill when no price is readable.
+function FeedPrice({ token }: { token: string }) {
+  const [price, setPrice] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () =>
+      fetchSpotPriceRBLX(token as Address).then((p) => {
+        if (alive) setPrice(p);
+      });
+    read();
+    const timer = window.setInterval(read, 20000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [token]);
+  return (
+    <span className="feed-price">
+      <span className="feed-live-dot" />
+      {price === null ? "Live" : `${formatPrice(price)} ${PAIR_LABEL}`}
+    </span>
+  );
+}
+
 function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: string) => void }) {
   const ticker = record.symbol.toUpperCase();
   const openable = Boolean(record.tokenAddress && onOpen);
   return (
     <article
-      className={`feed-card ${openable ? "feed-card-open" : ""}`}
+      className={`feed-card ${openable ? "feed-card-open" : ""} ${record.official ? "feed-card-official" : ""}`}
       onClick={openable ? () => onOpen!(record.tokenAddress as string) : undefined}
     >
       <div className="feed-media">
@@ -216,21 +250,27 @@ function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: st
           />
         ) : null}
         <span className="feed-media-fallback">{ticker.slice(0, 4)}</span>
-        <span className="feed-badge"><Zap size={11} /> {ROBUX_TICKER} loop</span>
+        {record.official ? (
+          <span className="feed-badge feed-badge-official"><BadgeCheck size={11} /> Official</span>
+        ) : (
+          <span className="feed-badge"><Zap size={11} /> {ROBUX_TICKER} loop</span>
+        )}
         {record.buybackEnabled && <span className="feed-badge feed-badge-buyback">Buyback</span>}
-        <button
-          className="feed-remove"
-          aria-label="Remove from feed"
-          onClick={(e) => {
-            e.stopPropagation();
-            removeLaunch(record.id);
-            toast.success(`Removed ${record.name}`, {
-              action: { label: "Undo", onClick: () => restoreLaunch(record) },
-            });
-          }}
-        >
-          <Trash2 size={13} />
-        </button>
+        {!record.official && (
+          <button
+            className="feed-remove"
+            aria-label="Remove from feed"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeLaunch(record.id);
+              toast.success(`Removed ${record.name}`, {
+                action: { label: "Undo", onClick: () => restoreLaunch(record) },
+              });
+            }}
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
       <div className="feed-body">
         <div className="feed-heading">
@@ -239,19 +279,29 @@ function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: st
         </div>
         <div className="feed-subline">
           <span className="feed-pair">{PAIR_LABEL} pair</span>
-          <span className="feed-time">{timeAgo(record.createdAt)}</span>
+          {record.tokenAddress ? (
+            <FeedPrice token={record.tokenAddress} />
+          ) : (
+            <span className="feed-time">{timeAgo(record.createdAt)}</span>
+          )}
         </div>
         {record.description && <p className="feed-desc">{record.description}</p>}
         <div className="feed-links" onClick={(e) => e.stopPropagation()}>
-          <a href={explorerTx(record.txHash)} target="_blank" rel="noreferrer">
-            Transaction <ArrowUpRight size={12} />
-          </a>
+          {record.official ? (
+            <a href={explorerAddress(record.tokenAddress as Address)} target="_blank" rel="noreferrer">
+              Contract <ArrowUpRight size={12} />
+            </a>
+          ) : (
+            <a href={explorerTx(record.txHash)} target="_blank" rel="noreferrer">
+              Transaction <ArrowUpRight size={12} />
+            </a>
+          )}
           {record.website && (
             <a href={record.website} target="_blank" rel="noreferrer">
               <Globe size={12} /> Site
             </a>
           )}
-          <span className="feed-creator">by {shorten(record.creator, 4)}</span>
+          <span className="feed-creator">by {record.official ? "Bloxpad" : shorten(record.creator, 4)}</span>
         </div>
       </div>
     </article>
