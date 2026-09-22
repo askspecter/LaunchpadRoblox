@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   FileText,
   Fuel,
   Globe,
+  ImagePlus,
   LayoutGrid,
   LoaderCircle,
   Menu as MenuIcon,
@@ -538,6 +539,43 @@ export default function Home() {
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [field]: value }));
 
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Read an uploaded image and downscale it to a compact data URL so it can be
+  // stored with the launch and shown on the feed card without needing a link.
+  const onLogoFile = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Please choose an image file.");
+    if (file.size > 8 * 1024 * 1024) return toast.error("Image is too large (max 8 MB).");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 256;
+        let { width, height } = img;
+        if (width >= height && width > max) {
+          height = Math.round((height * max) / width);
+          width = max;
+        } else if (height > max) {
+          width = Math.round((width * max) / height);
+          height = max;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return setField("logo", reader.result as string);
+        ctx.drawImage(img, 0, 0, width, height);
+        const transparent = /image\/(png|gif|webp|svg)/.test(file.type);
+        setField("logo", canvas.toDataURL(transparent ? "image/png" : "image/jpeg", 0.82));
+      };
+      img.onerror = () => toast.error("Could not read that image.");
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => toast.error("Could not read that file.");
+    reader.readAsDataURL(file);
+  };
+
   const walletLabel = account ? shorten(account) : "Connect wallet";
 
   const feedPage = (
@@ -610,7 +648,24 @@ export default function Home() {
             <label className="field"><span>Token name</span><input value={form.name} onChange={(event) => setField("name", event.target.value)} placeholder="Block Party" /></label>
             <label className="field"><span>Ticker</span><input value={form.symbol} onChange={(event) => setField("symbol", event.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10))} placeholder="BLOCK" /></label>
             <label className="field field-wide"><span>Description</span><textarea value={form.description} onChange={(event) => setField("description", event.target.value)} placeholder="Tell people why this launch is worth following…" rows={4} /></label>
-            <label className="field"><span>Logo URL / IPFS</span><input value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="ipfs://…" /></label>
+            <div className="field field-logo"><span>Logo image</span>
+              {form.logo ? (
+                <div className="logo-preview">
+                  <img src={form.logo} alt="Logo preview" />
+                  <div className="logo-preview-actions">
+                    <button type="button" onClick={() => logoInputRef.current?.click()}>Change</button>
+                    <button type="button" onClick={() => setField("logo", "")}>Remove</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className="logo-dropzone" onClick={() => logoInputRef.current?.click()}>
+                  <ImagePlus size={18} />
+                  <strong>Add image</strong>
+                  <small>PNG, JPG, GIF · uploaded directly</small>
+                </button>
+              )}
+              <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={(event) => { onLogoFile(event.target.files?.[0]); event.target.value = ""; }} />
+            </div>
             <label className="field"><span>Website</span><input value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="https://…" /></label>
             <label className="field"><span>X / Twitter</span><input value={form.twitter} onChange={(event) => setField("twitter", event.target.value)} placeholder="https://x.com/…" /></label>
             <label className="field">
