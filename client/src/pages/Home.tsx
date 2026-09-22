@@ -38,6 +38,7 @@ import {
   isAddress,
   isAddressEqual,
   parseEther,
+  parseEventLogs,
   parseUnits,
   toHex,
   zeroAddress,
@@ -527,6 +528,7 @@ export default function Home() {
           },
           selectedConfig,
           contracts.pairToken,
+          [],
         ],
         value: fee,
       });
@@ -538,6 +540,22 @@ export default function Home() {
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") {
         return toast.error("Launch reverted on chain — nothing was added to the feed.");
+      }
+      // Resolve the launched token and curve from the TokenLaunched event so the
+      // token page can read on-chain state.
+      let tokenAddress: Address | undefined;
+      let curveAddress: Address | undefined;
+      try {
+        const logs = parseEventLogs({
+          abi: factoryAbi,
+          eventName: "TokenLaunched",
+          logs: receipt.logs,
+        });
+        const launched = logs[0]?.args as { token?: Address; curve?: Address } | undefined;
+        tokenAddress = launched?.token;
+        curveAddress = launched?.curve;
+      } catch {
+        /* event not found — feed still records the launch without addresses */
       }
       addLaunch({
         name: form.name.trim(),
@@ -552,6 +570,8 @@ export default function Home() {
         targetToken: contracts.targetToken,
         txHash: hash,
         creator: account,
+        tokenAddress,
+        curveAddress,
       });
       setForm(initialForm);
       toast.success("Launch confirmed. Added to the live feed.");

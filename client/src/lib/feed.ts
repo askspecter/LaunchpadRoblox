@@ -17,6 +17,10 @@ export type LaunchRecord = {
   txHash: Hash;
   creator: Address;
   createdAt: number;
+  // Resolved from the launch receipt when available, so a token page can read
+  // the curve and token state directly.
+  tokenAddress?: Address;
+  curveAddress?: Address;
 };
 
 const STORAGE_KEY = "robux-loop:launch-feed:v1";
