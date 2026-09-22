@@ -1,8 +1,9 @@
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import { defineChain as defineAppKitChain } from "@reown/appkit/networks";
+import type { AppKitNetwork } from "@reown/appkit/networks";
 import {
   createPublicClient,
-  createWalletClient,
-  custom,
-  defineChain,
+  defineChain as defineViemChain,
   http,
   parseAbi,
   zeroAddress,
@@ -13,7 +14,16 @@ export const robinhoodRpcUrl =
   import.meta.env.VITE_ROBINHOOD_RPC_URL ||
   "https://rpc.mainnet.chain.robinhood.com";
 
-export const robinhoodChain = defineChain({
+// Reown (WalletConnect) project id. Create one for free at https://dashboard.reown.com
+// and expose it as VITE_REOWN_PROJECT_ID. The fallback keeps the app booting with
+// injected/browser wallets; the WalletConnect QR flow needs a real project id.
+export const REOWN_PROJECT_ID =
+  import.meta.env.VITE_REOWN_PROJECT_ID || "b56e18d47c72ab683b10814fe9495694";
+
+const explorerUrl = "https://robinhoodchain.blockscout.com";
+
+// viem chain — used by the read-only public client.
+export const robinhoodChain = defineViemChain({
   id: 4663,
   name: "Robinhood Chain",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
@@ -21,16 +31,38 @@ export const robinhoodChain = defineChain({
     default: { http: [robinhoodRpcUrl] },
   },
   blockExplorers: {
-    default: {
-      name: "Robinhood Chain Explorer",
-      url: "https://robinhoodchain.blockscout.com",
-    },
+    default: { name: "Robinhood Chain Explorer", url: explorerUrl },
   },
 });
 
+// AppKit network — used by the Reown adapter and connect modal.
+export const robinhoodNetwork: AppKitNetwork = defineAppKitChain({
+  id: 4663,
+  caipNetworkId: "eip155:4663",
+  chainNamespace: "eip155",
+  name: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: [robinhoodRpcUrl] },
+  },
+  blockExplorers: {
+    default: { name: "Robinhood Chain Explorer", url: explorerUrl },
+  },
+});
+
+export const wagmiAdapter = new WagmiAdapter({
+  networks: [robinhoodNetwork],
+  projectId: REOWN_PROJECT_ID,
+  ssr: false,
+});
+
+export const wagmiConfig = wagmiAdapter.wagmiConfig;
+
 const envAddress = (key: string, fallback: Address): Address => {
   const value = import.meta.env[key];
-  return (typeof value === "string" && value.startsWith("0x") ? value : fallback) as Address;
+  return (typeof value === "string" && value.startsWith("0x")
+    ? value
+    : fallback) as Address;
 };
 
 export const contracts = {
@@ -113,51 +145,7 @@ export type LaunchConfig = {
   enabled: boolean;
 };
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] | object }) => Promise<unknown>;
-    };
-  }
-}
-
-export async function connectInjectedWallet() {
-  if (!window.ethereum) throw new Error("Wallet EVM tidak ditemukan. Pasang Rabby atau MetaMask.");
-
-  await window.ethereum.request({ method: "eth_requestAccounts" });
-
-  try {
-    await window.ethereum.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0x1237" }],
-    });
-  } catch (error) {
-    const switchError = error as { code?: number };
-    if (switchError.code !== 4902) throw error;
-    await window.ethereum.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          chainId: "0x1237",
-          chainName: "Robinhood Chain",
-          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-          rpcUrls: [robinhoodRpcUrl],
-          blockExplorerUrls: ["https://robinhoodchain.blockscout.com"],
-        },
-      ],
-    });
-  }
-
-  const walletClient = createWalletClient({
-    chain: robinhoodChain,
-    transport: custom(window.ethereum),
-  });
-  const [account] = await walletClient.getAddresses();
-  return { walletClient, account };
-}
-
 export const explorerAddress = (address: Address) =>
-  `${robinhoodChain.blockExplorers.default.url}/address/${address}`;
+  `${explorerUrl}/address/${address}`;
 
-export const explorerTx = (hash: `0x${string}`) =>
-  `${robinhoodChain.blockExplorers.default.url}/tx/${hash}`;
+export const explorerTx = (hash: `0x${string}`) => `${explorerUrl}/tx/${hash}`;
