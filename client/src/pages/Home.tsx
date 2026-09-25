@@ -1385,7 +1385,7 @@ export default function Home() {
     <div className="site-shell">
       <header className="topbar">
         <button className="brand" onClick={() => navigate("feed")} aria-label="Bloxpad home">
-          <img className="brand-icon" src="/images/bloxpad-logo.png" alt="" />
+          <img className="brand-icon" src="/images/museblox-logo.jpg" alt="" />
           <span>BLOX<span className="brand-accent">PAD</span></span>
         </button>
         <div className="topbar-actions">
@@ -1439,7 +1439,7 @@ export default function Home() {
       </main>
 
       <footer className="footer container">
-        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/bloxpad-logo.png" alt="" /><span>BLOX<span className="brand-accent">PAD</span></span></button>
+        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/museblox-logo.jpg" alt="" /><span>BLOX<span className="brand-accent">PAD</span></span></button>
         <p>Bloxpad is an independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
         <div className="footer-links">
           <a href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">@bloxpadapp <ArrowUpRight size={13} /></a>

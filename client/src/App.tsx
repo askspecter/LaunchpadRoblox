@@ -8,7 +8,7 @@ import Home from "./pages/Home";
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="light">
         <Web3Provider>
           <TooltipProvider>
             <Home />
