@@ -10,7 +10,8 @@
 
 export const config = { runtime: "edge" };
 
-const KEY = "bloxpad:feed:v1";
+// v2: feed reset — a fresh KV list, so the shared feed starts empty for everyone.
+const KEY = "bloxpad:feed:v2";
 const MAX_RECORDS = 60;
 
 const REST_URL =
@@ -133,7 +134,13 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     if (req.method === "DELETE") {
-      const id = new URL(req.url).searchParams.get("id") || "";
+      const params = new URL(req.url).searchParams;
+      // Admin: wipe the entire shared feed in one call (DELETE /api/feed?all=1).
+      if (params.get("all")) {
+        await kv(["DEL", KEY]);
+        return json({ ok: true, cleared: true });
+      }
+      const id = params.get("id") || "";
       if (!id) return json({ error: "missing_id" }, 400);
       const remaining = (await readFeed()).filter((r) => r.id !== id);
       await kv(["DEL", KEY]);

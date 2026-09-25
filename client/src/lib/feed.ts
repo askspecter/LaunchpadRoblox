@@ -26,7 +26,8 @@ export type LaunchRecord = {
   official?: boolean;
 };
 
-const STORAGE_KEY = "robux-loop:launch-feed:v1";
+// v2: feed reset — old v1 caches/records are ignored so the feed starts empty.
+const STORAGE_KEY = "robux-loop:launch-feed:v2";
 const MAX_RECORDS = 60;
 // Shared, server-side feed. Falls back to localStorage-only when the API or KV
 // is unavailable (e.g. local `vite dev` with no backend).
