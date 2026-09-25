@@ -1,11 +1,30 @@
-import { zeroAddress, type Address } from "viem";
+import { zeroAddress, type Address, type Hash } from "viem";
 import { contracts, curveAbi, factoryAbi, publicClient, readWithRetry } from "./web3";
 import { spotPrice } from "./curveQuote";
 import type { LaunchRecord } from "./feed";
 
-// Curated, official tokens pinned to the top of the live feed. Empty for now —
-// no official token is listed (the previous $BLOX pin was removed).
-export const OFFICIAL_TOKENS: LaunchRecord[] = [];
+// Curated, official tokens pinned to the top of the live feed. Code-only: never
+// written to the shared store, cannot be removed, and shown to every visitor.
+export const OFFICIAL_TOKENS: LaunchRecord[] = [
+  {
+    id: "official:museblox",
+    name: "MuseBlox",
+    symbol: "MUSEBLOX",
+    description: "The official MuseBlox token. Paired with RBLX.",
+    logo: "/images/museblox-logo.jpg",
+    website: "https://museblox.app",
+    twitter: "https://x.com/musebloxapp",
+    creatorTaxBps: 0,
+    buybackEnabled: true,
+    configId: "0",
+    targetToken: contracts.targetToken,
+    txHash: `0x${"0".repeat(64)}` as Hash,
+    creator: zeroAddress,
+    createdAt: 0, // sentinel: the card shows "Official" instead of a timestamp
+    tokenAddress: "0x99395c56ac05b171394809688ccf9609db43cf1f" as Address,
+    official: true,
+  },
+];
 
 const OFFICIAL_ADDRS = new Set(
   OFFICIAL_TOKENS.map((t) => (t.tokenAddress ?? "").toLowerCase()).filter(Boolean),
