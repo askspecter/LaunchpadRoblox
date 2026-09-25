@@ -301,7 +301,7 @@ function FeedCard({ record, onOpen }: { record: LaunchRecord; onOpen?: (addr: st
               <Globe size={12} /> Site
             </a>
           )}
-          <span className="feed-creator">by {record.official ? "Bloxpad" : shorten(record.creator, 4)}</span>
+          <span className="feed-creator">by {record.official ? "Museblox" : shorten(record.creator, 4)}</span>
         </div>
       </div>
     </article>
@@ -932,7 +932,7 @@ export default function Home() {
 
       <div className="store-notice">
         <ShieldCheck size={18} />
-        <p><strong>How delivery works.</strong> Robux is <b>delivered manually by the store operator</b> after your ETH payment confirms. Bloxpad the software does not mint, hold, or guarantee Robux, and does <b>not</b> auto-convert crypto into Robux. Bloxpad is not affiliated with Roblox Corporation. Your wallet signs the payment; the app never holds a private key. Only buy if you trust the operator to fulfil your order.</p>
+        <p><strong>How delivery works.</strong> Robux is <b>delivered manually by the store operator</b> after your ETH payment confirms. Museblox the software does not mint, hold, or guarantee Robux, and does <b>not</b> auto-convert crypto into Robux. Museblox is not affiliated with Roblox Corporation. Your wallet signs the payment; the app never holds a private key. Only buy if you trust the operator to fulfil your order.</p>
       </div>
 
       <div className="store-grid">
@@ -994,7 +994,7 @@ export default function Home() {
             <input
               value={redeemInput}
               onChange={(e) => { setRedeemInput(e.target.value); setRedeemStatus(null); }}
-              placeholder="BLOX-XXXX-XXXX-XXXX-XXXX"
+              placeholder="MUSE-XXXX-XXXX-XXXX-XXXX"
               spellCheck={false}
             />
             <Button className="redeem-btn" onClick={runRedeem} disabled={!redeemInput.trim()}>
@@ -1083,7 +1083,7 @@ export default function Home() {
                 </button>
               )}
               <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={(event) => { onLogoFile(event.target.files?.[0]); event.target.value = ""; }} />
-              <small className="field-hint">Uploaded image shows on the Bloxpad feed. For a logo on Pons and the explorer, add a short image URL below.</small>
+              <small className="field-hint">Uploaded image shows on the Museblox feed. For a logo on Pons and the explorer, add a short image URL below.</small>
             </div>
             <label className="field field-wide"><span>Logo URL (on-chain, optional)</span><input value={form.logoUrl} onChange={(event) => setField("logoUrl", event.target.value)} placeholder="https://…/logo.png" /></label>
             <label className="field"><span>Website</span><input value={form.website} onChange={(event) => setField("website", event.target.value)} placeholder="https://…" /></label>
@@ -1282,7 +1282,7 @@ export default function Home() {
       <div className="page-head">
         <button className="page-back" onClick={() => navigate("feed")}><ArrowLeft size={15} /> Feed</button>
         <div className="eyebrow"><span /> <BookOpen size={13} /> Documentation</div>
-        <h1 className="page-title">Bloxpad, end to end.</h1>
+        <h1 className="page-title">Museblox, end to end.</h1>
         <p className="page-sub">Everything the interface does, in plain language: how a launch works, how the Robux store works, how redeem codes are generated, and exactly where custody does and does not sit.</p>
       </div>
 
@@ -1299,8 +1299,8 @@ export default function Home() {
         <div className="docs-main">
           <article id="doc-intro" className="docs-section">
             <h2><BookOpen size={18} /> Overview</h2>
-            <p>Bloxpad is a launchpad interface on <b>Robinhood Chain</b> (chain ID 4663). You can launch a token in a single wallet signature, and you can run a Robux store on top of it. It is a front end only: there is no server holding your funds and no private key anywhere in the app.</p>
-            <p>The theme is Roblox, but the mechanics are ordinary on-chain mechanics. Bloxpad is an independent project and is <b>not affiliated with Roblox Corporation</b>, Robinhood Markets, or any token issuer. It never mints, holds, or guarantees Roblox in-game currency.</p>
+            <p>Museblox is a launchpad interface on <b>Robinhood Chain</b> (chain ID 4663). You can launch a token in a single wallet signature, and you can run a Robux store on top of it. It is a front end only: there is no server holding your funds and no private key anywhere in the app.</p>
+            <p>The theme is Roblox, but the mechanics are ordinary on-chain mechanics. Museblox is an independent project and is <b>not affiliated with Roblox Corporation</b>, Robinhood Markets, or any token issuer. It never mints, holds, or guarantees Roblox in-game currency.</p>
           </article>
 
           <article id="doc-start" className="docs-section">
@@ -1321,19 +1321,19 @@ export default function Home() {
 
           <article id="doc-pair" className="docs-section">
             <h2><Coins size={18} /> The RBLX pair</h2>
-            <p>Every launch is denominated in a <b>pair (quote) asset</b>. Bloxpad is configured to pair with <b>RBLX</b> — the Roblox · Robinhood Token at <code>0xF0C4…1bE8</code> — so the bonding curve, trades, and creator fees are all in RBLX. You receive RBLX directly; there is no ETH-to-RBLX swap step.</p>
+            <p>Every launch is denominated in a <b>pair (quote) asset</b>. Museblox is configured to pair with <b>RBLX</b> — the Roblox · Robinhood Token at <code>0xF0C4…1bE8</code> — so the bonding curve, trades, and creator fees are all in RBLX. You receive RBLX directly; there is no ETH-to-RBLX swap step.</p>
             <p>The pair is configurable through <code>VITE_PAIR_TOKEN_ADDRESS</code>. Set it to the zero address to pair with native ETH instead. Always confirm the token has liquidity on the chosen Pons config before relying on it.</p>
           </article>
 
           <article id="doc-store" className="docs-section">
             <h2><ShoppingBag size={18} /> Robux store</h2>
             <p>The <button className="docs-link" onClick={() => navigate("store")}>Store</button> lets a buyer pay native ETH for a Robux pack. When the payment confirms, the app issues an <b>order code</b> bound to that exact transaction — the buyer's proof of purchase.</p>
-            <p><b>Delivery is manual.</b> Bloxpad does not mint, hold, auto-convert, or guarantee Robux. As the operator, you deliver Robux to the buyer yourself (for example with genuinely purchased Roblox gift cards) and then mark the order fulfilled. Only run a store if you can honour every order, and know that reselling Robux may conflict with Roblox's own terms — that responsibility is yours.</p>
+            <p><b>Delivery is manual.</b> Museblox does not mint, hold, auto-convert, or guarantee Robux. As the operator, you deliver Robux to the buyer yourself (for example with genuinely purchased Roblox gift cards) and then mark the order fulfilled. Only run a store if you can honour every order, and know that reselling Robux may conflict with Roblox's own terms — that responsibility is yours.</p>
           </article>
 
           <article id="doc-codes" className="docs-section">
             <h2><KeyRound size={18} /> Redeem codes</h2>
-            <p>Each order code is derived from the payment transaction hash with keccak256 and encoded in a typo-resistant base32 with a checksum, formatted as <code>BLOX-XXXX-XXXX-XXXX-XXXX</code>. Because the code comes from the transaction, every code maps to exactly one real, explorer-verifiable payment and cannot be invented.</p>
+            <p>Each order code is derived from the payment transaction hash with keccak256 and encoded in a typo-resistant base32 with a checksum, formatted as <code>MUSE-XXXX-XXXX-XXXX-XXXX</code>. Because the code comes from the transaction, every code maps to exactly one real, explorer-verifiable payment and cannot be invented.</p>
             <p>Codes and orders are stored in your browser on the device that made them. Marking a code fulfilled is a one-way, once-only action so an order cannot be delivered twice on that device.</p>
           </article>
 
@@ -1349,7 +1349,7 @@ export default function Home() {
 
           <article id="doc-setup" className="docs-section">
             <h2><Network size={18} /> Network &amp; setup</h2>
-            <p>Bloxpad runs on Robinhood Chain (chain ID 4663, native gas token ETH). For a production deployment set these environment variables:</p>
+            <p>Museblox runs on Robinhood Chain (chain ID 4663, native gas token ETH). For a production deployment set these environment variables:</p>
             <div className="docs-env">
               <div><code>VITE_ROBINHOOD_RPC_URL</code><span>A dedicated RPC endpoint (Alchemy, Chainstack, QuickNode…). The public endpoint is rate limited.</span></div>
               <div><code>VITE_REOWN_PROJECT_ID</code><span>Reown / WalletConnect project id from dashboard.reown.com.</span></div>
@@ -1362,15 +1362,15 @@ export default function Home() {
           <article id="doc-faq" className="docs-section">
             <h2><HelpCircle size={18} /> FAQ</h2>
             <div className="docs-faq">
-              <div><strong>Does Bloxpad give real Roblox Robux automatically?</strong><p>No. Nothing on-chain can mint Roblox currency. Store delivery is manual and handled by the operator. Any site promising automatic crypto-to-Robux is a scam.</p></div>
+              <div><strong>Does Museblox give real Roblox Robux automatically?</strong><p>No. Nothing on-chain can mint Roblox currency. Store delivery is manual and handled by the operator. Any site promising automatic crypto-to-Robux is a scam.</p></div>
               <div><strong>Why does it say "No adapter yet"?</strong><p>That is expected. The optional ETH-to-RBLX adapter is not needed when launches already pair with RBLX — fees arrive as RBLX in your wallet.</p></div>
-              <div><strong>Do you hold my funds?</strong><p>No. Bloxpad is a front end. Your wallet signs everything and custody never leaves it.</p></div>
+              <div><strong>Do you hold my funds?</strong><p>No. Museblox is a front end. Your wallet signs everything and custody never leaves it.</p></div>
               <div><strong>Is RBLX here the Roblox stock?</strong><p>The default pair token is the Roblox · Robinhood Token (RBLX). It is a tokenized asset on Robinhood Chain, not Roblox in-game currency. Verify the address yourself.</p></div>
             </div>
           </article>
 
           <div className="docs-foot">
-            <p>Bloxpad is an independent interface. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. Always verify contract addresses before you transact.</p>
+            <p>Museblox is an independent interface. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. Always verify contract addresses before you transact.</p>
             <div className="docs-foot-links">
               <button className="docs-link" onClick={() => navigate("launch")}>Launch a coin <ArrowRight size={14} /></button>
               <button className="docs-link" onClick={() => navigate("contracts")}>See contracts <ArrowRight size={14} /></button>
@@ -1384,9 +1384,9 @@ export default function Home() {
   return (
     <div className="site-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => navigate("feed")} aria-label="Bloxpad home">
-          <img className="brand-icon" src="/images/bloxpad-logo.png" alt="" />
-          <span>BLOX<span className="brand-accent">PAD</span></span>
+        <button className="brand" onClick={() => navigate("feed")} aria-label="Museblox home">
+          <img className="brand-icon" src="/images/museblox-logo.jpg" alt="" />
+          <span>MUSE<span className="brand-accent">BLOX</span></span>
         </button>
         <div className="topbar-actions">
           <Button className="launch-cta-btn" onClick={() => navigate("launch")}>
@@ -1416,7 +1416,7 @@ export default function Home() {
             ))}
           </nav>
           <div className="drawer-foot">
-            <a className="drawer-social" href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">Follow @bloxpadapp on X</a>
+            <a className="drawer-social" href="https://x.com/musebloxapp" target="_blank" rel="noreferrer">Follow @musebloxapp on X</a>
             <Button className="drawer-launch" onClick={() => navigate("launch")}>
               <Rocket size={16} /> Launch a coin
             </Button>
@@ -1439,10 +1439,10 @@ export default function Home() {
       </main>
 
       <footer className="footer container">
-        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/bloxpad-logo.png" alt="" /><span>BLOX<span className="brand-accent">PAD</span></span></button>
-        <p>Bloxpad is an independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
+        <button className="brand" onClick={() => navigate("feed")}><img className="brand-icon" src="/images/museblox-logo.jpg" alt="" /><span>MUSE<span className="brand-accent">BLOX</span></span></button>
+        <p>Museblox is an independent interface for Pons V2 on Robinhood Chain. Not affiliated with Roblox Corporation, Robinhood Markets, Pons, or Uniswap. R$ denotes the {ROBUX_TICKER} target token, not fiat.</p>
         <div className="footer-links">
-          <a href="https://x.com/bloxpadapp" target="_blank" rel="noreferrer">@bloxpadapp <ArrowUpRight size={13} /></a>
+          <a href="https://x.com/musebloxapp" target="_blank" rel="noreferrer">@musebloxapp <ArrowUpRight size={13} /></a>
           <button className="footer-docs-link" onClick={() => navigate("docs")}>Docs <ArrowRight size={13} /></button>
         </div>
       </footer>

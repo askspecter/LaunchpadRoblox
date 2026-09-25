@@ -19,11 +19,11 @@ createAppKit({
   defaultNetwork: robinhoodNetwork,
   projectId: REOWN_PROJECT_ID,
   metadata: {
-    name: "Bloxpad",
+    name: "Museblox",
     description:
       "Launch tokens on Pons V2 with a native ETH pair and loop creator fees into Robux.",
-    url: typeof window !== "undefined" ? window.location.origin : "https://bloxpad.app",
-    icons: ["/images/bloxpad-logo.png"],
+    url: typeof window !== "undefined" ? window.location.origin : "https://museblox.app",
+    icons: ["/images/museblox-logo.png"],
   },
   features: {
     analytics: false,
