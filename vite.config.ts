@@ -203,9 +203,20 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
+export default defineConfig(({ command }) => {
+  const isBuild = command === "build";
+  // The Manus platform runtime (a large inlined script) and debug collector are
+  // only useful inside the Manus dev/preview environment. Excluding them from the
+  // production build drops a ~360KB render-blocking inline script from index.html.
+  const plugins = [
+    react(),
+    tailwindcss(),
+    jsxLocPlugin(),
+    vitePluginStorageProxy(),
+    ...(isBuild ? [] : [vitePluginManusRuntime(), vitePluginManusDebugCollector()]),
+  ];
 
-export default defineConfig({
+  return {
   plugins,
   resolve: {
     alias: {
@@ -219,6 +230,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        // Split heavy vendors into their own long-cached chunks so they load in
+        // parallel and stay cached across deploys.
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react";
+          if (id.includes("@reown") || id.includes("@walletconnect")) return "reown";
+          if (id.includes("wagmi")) return "wagmi";
+          if (id.includes("viem") || id.includes("abitype") || id.includes("/ox/")) return "viem";
+        },
+      },
+    },
   },
   server: {
     port: 3000,
@@ -238,4 +263,5 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  };
 });
