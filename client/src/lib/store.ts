@@ -65,7 +65,7 @@ const checksum = (body: string): string => {
 };
 
 const format = (chars16: string): string =>
-  `BLOX-${chars16.slice(0, 4)}-${chars16.slice(4, 8)}-${chars16.slice(8, 12)}-${chars16.slice(12, 16)}`;
+  `MUSE-${chars16.slice(0, 4)}-${chars16.slice(4, 8)}-${chars16.slice(8, 12)}-${chars16.slice(12, 16)}`;
 
 /**
  * Derive the redeem code for a confirmed payment. Deterministic: the same
